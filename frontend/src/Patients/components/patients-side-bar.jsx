@@ -1,4 +1,5 @@
 // src/components/Sidebar.jsx
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
 const NAV_ITEMS = [
@@ -57,18 +58,77 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
+
+  // Detect screen size changes
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth >= 768) {
+        setIsOpen(false); // Close sidebar on desktop
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleLogout = () => {
     // Perform authentication logout logic here...
     alert('Logging out...');
     navigate('/');
+    setIsOpen(false);
   };
 
+  const closeSidebar = () => setIsOpen(false);
+  const toggleSidebar = () => setIsOpen(!isOpen);
+
   return (
-    <aside 
-      aria-label="Sidebar Navigation"
-      className="w-72 bg-[#f8fcfd] border-r border-slate-200/60 flex flex-col justify-between h-screen p-5 select-none flex-shrink-0"
-    >
+    <>
+      {/* Hamburger Menu Button - Mobile Only */}
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        aria-label="Toggle menu"
+        aria-expanded={isOpen}
+        className="fixed top-4 left-4 z-50 block md:hidden p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
+      >
+        <svg
+          className="w-6 h-6 text-slate-700"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+        >
+          {isOpen ? (
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          ) : (
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          )}
+        </svg>
+      </button>
+
+      {/* Backdrop Overlay - Mobile Only */}
+      {isOpen && (
+        <button
+          type="button"
+          onClick={closeSidebar}
+          aria-label="Close menu"
+          className="fixed inset-0 z-40 bg-black/50 block md:hidden"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside 
+        aria-label="Sidebar Navigation"
+        className="fixed inset-y-0 left-0 md:static z-50 md:z-auto w-72 bg-[#f8fcfd] border-r border-slate-200/60 flex flex-col justify-between h-screen md:h-auto p-5 select-none flex-shrink-0 transform md:transform-none transition-transform duration-300 ease-in-out"
+        style={
+          isMobile
+            ? { transform: isOpen ? 'translateX(0)' : 'translateX(-100%)' }
+            : {}
+        }
+      >
       {/* Top Section */}
       <div className="flex flex-col gap-8">
         {/* Brand / Logo Header */}
@@ -96,6 +156,7 @@ export default function Sidebar() {
                 <NavLink
                   to={item.path}
                   end={item.end || false}
+                  onClick={closeSidebar}
                   className={({ isActive }) =>
                     `relative flex items-center gap-4 px-4 py-3 rounded-xl text-sm transition-colors duration-150 ${
                       isActive
@@ -128,6 +189,7 @@ export default function Sidebar() {
       <div className="flex flex-col gap-1.5 pb-2">
         <NavLink
           to="/patient/help"
+          onClick={closeSidebar}
           className={({ isActive }) =>
             `group flex items-center gap-4 px-4 py-3 rounded-xl text-sm transition-colors duration-150 ${
               isActive
@@ -154,5 +216,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }
