@@ -1,4 +1,7 @@
 import { useLocation } from 'react-router-dom';
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import Settings from './Settings';
 
 // Map route paths to your desired dynamic titles
 const PAGE_TITLES = {
@@ -6,6 +9,7 @@ const PAGE_TITLES = {
   
   '/queue': 'Queue Management',
   '/patient': 'Welcome, Uditha',
+  '/patient/appointments' : 'Manage Appointments',
   '/schedule': 'Schedule Manager',
   '/staff': 'Staff Management',
   '/analytics': 'Analytics',
@@ -16,6 +20,44 @@ const PAGE_TITLES = {
 
 export default function Header() {
   const location = useLocation();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
+  const settingsButtonRef = useRef(null);
+  const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 });
+
+  // Close the settings panel when clicking outside of it or the settings button
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        settingsRef.current &&
+        !settingsRef.current.contains(event.target) &&
+        settingsButtonRef.current &&
+        !settingsButtonRef.current.contains(event.target)
+      ) {
+        setIsSettingsOpen(false);
+      }
+    };
+
+    if (isSettingsOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSettingsOpen]);
+
+  // Toggle settings panel and calculate its position relative to the settings button
+  const handleSettingsClick = () => {
+    if (settingsButtonRef.current) {
+      const rect = settingsButtonRef.current.getBoundingClientRect();
+      setPanelPosition({
+        top: rect.bottom,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setIsSettingsOpen((prev) => !prev);
+  };
 
   // Get current page title dynamically from route, or fallback to current path name
   const currentTitle =
@@ -85,6 +127,9 @@ export default function Header() {
         <button
           type="button"
           aria-label="Settings"
+          aria-expanded={isSettingsOpen}
+          ref={settingsButtonRef}
+          onClick={handleSettingsClick}
           className="p-1 md:p-1.5 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors flex-shrink-0"
         >
           <svg
@@ -117,6 +162,19 @@ export default function Header() {
         </div>
 
       </div>
+
+      {/* Settings Dropdown Panel - Rendered via portal outside the header to prevent height changes */}
+      {isSettingsOpen &&
+        createPortal(
+          <div
+            ref={settingsRef}
+            className="fixed z-50 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden"
+            style={{ top: `${panelPosition.top}px`, right: `${panelPosition.right}px` }}
+          >
+            <Settings />
+          </div>,
+          document.body
+        )}
     </header>
   );
 }
