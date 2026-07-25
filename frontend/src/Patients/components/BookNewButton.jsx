@@ -15,14 +15,14 @@ export default function BookNewAppointmentButton({
       onClick={onClick}
       disabled={disabled || loading}
       className={`
-        inline-flex items-center justify-center gap-2.5
-        px-6 py-3.5 rounded-2xl
+        inline-flex items-center justify-center gap-1.5 md:gap-2
+        px-3 md:px-6 py-2 md:py-3.5 rounded-lg md:rounded-2xl
         bg-[#00b8e6] hover:bg-[#00a3cc] active:scale-[0.98]
-        text-white font-semibold text-sm tracking-wide
+        text-white font-semibold text-xs md:text-sm tracking-wide
         shadow-[0_8px_20px_rgba(0,184,230,0.35)]
         transition-all duration-200 ease-in-out
         disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[#00b8e6] disabled:active:scale-100
-        select-none
+        select-none whitespace-nowrap
         ${className}
       `}
       {...props}
@@ -30,7 +30,7 @@ export default function BookNewAppointmentButton({
       {loading ? (
         /* Loading Spinner */
         <svg
-          className="animate-spin -ml-1 mr-1 h-5 w-5 text-white"
+          className="animate-spin -ml-1 mr-1 h-3 md:h-4 w-3 md:w-4 text-white"
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -51,7 +51,7 @@ export default function BookNewAppointmentButton({
       ) : (
         /* Plus Icon */
         <svg
-          className="w-5 h-5 flex-shrink-0"
+          className="w-3 md:w-4 h-3 md:h-4 flex-shrink-0"
           fill="none"
           stroke="currentColor"
           strokeWidth="2.5"
@@ -65,7 +65,8 @@ export default function BookNewAppointmentButton({
         </svg>
       )}
 
-      <span>{children}</span>
+      <span className="hidden sm:inline">{children}</span>
+      <span className="sm:hidden">Book</span>
     </button>
   );
 }

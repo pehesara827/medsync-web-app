@@ -14,7 +14,7 @@ export default function AppointmentsCarousel() {
       const container = scrollContainerRef.current;
       if (!container) return;
 
-      const cardWidth = container.firstElementChild?.clientWidth || 500;
+      const cardWidth = container.firstElementChild?.clientWidth || 300;
       const gap = 24; // gap-6 in Tailwind
       const scrollAmount = cardWidth + gap;
 
@@ -30,19 +30,19 @@ export default function AppointmentsCarousel() {
   }, [isHovered]);
 
   return (
-    <section className="w-full overflow-hidden">
+    <section className="w-full max-w-4xl overflow-hidden px-0 md:px-0">
       {/* Scrollable Container with Inline Tailwind Scrollbar Hiding */}
       <div
         ref={scrollContainerRef}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className="flex gap-6 overflow-x-auto scroll-smooth py-2 px-1 select-none [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]"
+        className="flex gap-4 md:gap-6 overflow-x-auto scroll-smooth py-2 px-1 select-none [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]"
         style={{ scrollSnapType: 'x mandatory' }}
       >
         {MOCK_APPOINTMENTS.map((item) => (
           <div
             key={item.id}
-            className="flex-shrink-0 w-[520px] max-w-[85vw]"
+            className="flex-shrink-0 w-full sm:w-96 md:w-[520px] max-w-[90vw] md:max-w-[85vw]"
             style={{ scrollSnapAlign: 'start' }}
           >
             <AppointmentCard appointment={item} />

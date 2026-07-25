@@ -1,41 +1,54 @@
 
+import { Star, MapPin, Clock, MoreHorizontal } from 'lucide-react';
+
 export default function DoctorCard({ doctor }) {
   if (!doctor) return null;
 
   return (
-    <div className="w-[280px] bg-white rounded-2xl p-3.5 border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] hover:shadow-lg transition-shadow duration-200 select-none flex flex-col gap-3">
-      
-      {/* Doctor Image Header */}
-      <div className="w-full h-44 rounded-xl overflow-hidden bg-slate-100">
-        <img
-          src={doctor.image}
-          alt={doctor.name}
-          className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-300"
-        />
-      </div>
-
-      {/* Doctor Details */}
-      <div className="flex flex-col gap-1 px-1 pb-1">
-        <h3 className="text-lg font-bold text-slate-800 tracking-tight leading-snug">
-          {doctor.name}
-        </h3>
-        
-        <p className="text-[#00b0d8] text-sm font-medium">
-          {doctor.specialty}
-        </p>
-
-        {/* Rating and Reviews */}
-        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-1">
-          {/* Orange Star Icon */}
-          <svg className="w-4 h-4 text-[#f0a04b] fill-current" viewBox="0 0 24 24">
-            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-          </svg>
-          
-          <span>{doctor.rating.toFixed(1)}</span>
-          <span>({doctor.reviewsCount} reviews)</span>
+    <div className="w-full bg-white rounded-xl p-4 border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col gap-3">
+      <div className="flex items-start justify-between">
+        <div className="relative">
+          <img
+            src={doctor.image}
+            alt={doctor.name}
+            className="w-[70px] h-[70px] rounded-full object-cover"
+          />
+          <div className="absolute bottom-0 right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+        </div>
+        <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg">
+          <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+          <span className="text-xs font-bold text-slate-700">{doctor.rating.toFixed(1)}</span>
         </div>
       </div>
 
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-base font-bold text-slate-800 leading-tight">
+          {doctor.name}
+        </h3>
+        <p className="text-xs font-medium text-slate-400">
+          {doctor.specialty}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 pt-1">
+        <div className="flex items-center gap-2 text-slate-400">
+          <MapPin className="w-3.5 h-3.5" />
+          <span className="text-xs font-medium">800m away</span>
+        </div>
+        <div className="flex items-center gap-2 text-slate-400">
+          <Clock className="w-3.5 h-3.5" />
+          <span className="text-xs font-medium">Available: 09:00 AM</span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-1">
+        <button className="flex-1 bg-[#00b0d8] text-white text-xs font-bold py-2.5 rounded-xl hover:bg-[#009bbf] transition-colors">
+          Book Now
+        </button>
+        <button className="p-2.5 text-slate-400 hover:text-slate-600">
+          <MoreHorizontal className="w-5 h-5" />
+        </button>
+      </div>
     </div>
   );
 }

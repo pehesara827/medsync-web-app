@@ -9,10 +9,9 @@ export default function FavoriteDoctorsCarousel({
   const scrollContainerRef = useRef(null);
 
   return (
-    <section className="w-full flex flex-col gap-4 py-4">
-      {/* Section Header */}
-      <div className="flex items-center justify-between px-1">
-        <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+    <section className="w-full flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-800 tracking-tight">
           Favorite Doctors
         </h2>
 
@@ -28,21 +27,12 @@ export default function FavoriteDoctorsCarousel({
         </button>
       </div>
 
-      {/* Scrollable Cards Track (Scrollbar Hidden Inline) */}
       <div
         ref={scrollContainerRef}
-        className="flex items-stretch gap-6 overflow-x-auto scroll-smooth py-2 px-1 select-none [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]"
-        style={{ scrollSnapType: 'x mandatory' }}
+        className="grid grid-cols-1 gap-4 select-none"
       >
-        {/* Doctor Cards */}
-        {doctors.map((doctor) => (
-          <div
-            key={doctor.id}
-            className="flex-shrink-0"
-            style={{ scrollSnapAlign: 'start' }}
-          >
-            <DoctorCard doctor={doctor} />
-          </div>
+        {doctors.slice(0, 3).map((doctor) => (
+          <DoctorCard key={doctor.id} doctor={doctor} />
         ))}
       </div>
     </section>

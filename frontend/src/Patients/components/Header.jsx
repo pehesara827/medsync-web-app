@@ -24,22 +24,22 @@ export default function Header() {
     'Dashboard';
 
   return (
-    <header className="w-full bg-white border-b border-slate-200/80 px-8 py-4 flex items-center justify-between select-none sticky top-0 z-10">
+    <header className="w-full bg-white border-b border-slate-200/80 px-4 md:px-8 py-2.5 md:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 select-none sticky top-0 z-10">
       
       {/* Dynamic Page Title */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-800 tracking-tight capitalize">
+        <h1 className="text-lg md:text-2xl font-bold text-slate-800 tracking-tight capitalize">
           {currentTitle}
         </h1>
       </div>
 
-      {/* Right Controls: Search, Notifications, Settings & User Avatar */}
-      <div className="flex items-center gap-6">
+      {/* Right Controls: Search, Notifications, Settings & User Avatar - Responsive */}
+      <div className="flex items-center gap-3 md:gap-6 w-full md:w-auto">
         
-        {/* Search Bar */}
-        <div className="relative flex items-center">
+        {/* Search Bar - Full width on mobile, fixed on desktop */}
+        <div className="relative flex items-center flex-1 md:flex-none">
           <svg
-            className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none"
+            className="w-3.5 md:w-4 h-3.5 md:w-4 text-slate-400 absolute left-3 md:left-3.5 pointer-events-none"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
@@ -53,8 +53,8 @@ export default function Header() {
           </svg>
           <input
             type="text"
-            placeholder="Search records, doctors..."
-            className="w-64 bg-slate-100/80 text-xs text-slate-700 placeholder-slate-400 pl-10 pr-4 py-2 rounded-full border border-transparent focus:outline-none focus:bg-white focus:border-[#00a8cc]/50 focus:ring-2 focus:ring-[#00a8cc]/10 transition-all duration-150"
+            placeholder="Search..."
+            className="w-full md:w-64 bg-slate-100/80 text-xs md:text-sm text-slate-700 placeholder-slate-400 pl-8 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 rounded-full border border-transparent focus:outline-none focus:bg-white focus:border-[#00a8cc]/50 focus:ring-2 focus:ring-[#00a8cc]/10 transition-all duration-150"
           />
         </div>
 
@@ -62,10 +62,10 @@ export default function Header() {
         <button
           type="button"
           aria-label="Notifications"
-          className="relative p-1.5 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors"
+          className="relative p-1 md:p-1.5 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors flex-shrink-0"
         >
           <svg
-            className="w-5 h-5"
+            className="w-4 md:w-5 h-4 md:h-5"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
@@ -78,17 +78,17 @@ export default function Header() {
             />
           </svg>
           {/* Active Blue Dot Badge */}
-          <span className="absolute top-1 right-1 w-2 h-2 bg-[#00a8cc] rounded-full ring-2 ring-white" />
+          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-[#00a8cc] rounded-full ring-1 md:ring-2 ring-white" />
         </button>
 
-        {/* Settings Icon */}
+        {/* Settings Icon - Hidden on very small screens */}
         <button
           type="button"
           aria-label="Settings"
-          className="p-1.5 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors"
+          className="p-1 md:p-1.5 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors flex-shrink-0"
         >
           <svg
-            className="w-5 h-5"
+            className="w-4 md:w-5 h-4 md:h-5"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
@@ -108,7 +108,7 @@ export default function Header() {
         </button>
 
         {/* User Profile Avatar */}
-        <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-200 cursor-pointer shadow-sm">
+        <div className="w-7 md:w-9 h-7 md:h-9 rounded-full overflow-hidden border border-slate-200 cursor-pointer shadow-sm flex-shrink-0">
           <img
             src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256"
             alt="User profile"
