@@ -17,6 +17,7 @@ import QueueManagement from './Admins/pages/queueManagement';
 import DoctorDashboard from './Doctors/pages/doctorsDashboard';
 
 import HomePage from './PublicSite/pages/Home';
+import AboutPage from './PublicSite/pages/About';
 
 function NotFound() {
   return <div className="p-8 text-center text-2xl font-bold">404 - Page Not Found</div>;
@@ -29,8 +30,8 @@ export default function App() {
 
         {/* 1. PUBLIC ROUTES (Main Navbar) */}
         <Route path="/" element={<PublicLayout />}>
-        <Route index element={<HomePage />} />
-          
+          <Route index element={<HomePage />} />
+          <Route path="about" element={<AboutPage />} />
         </Route>
 
         {/* 2. PATIENT ROUTES (Patient Sidebar) */}
