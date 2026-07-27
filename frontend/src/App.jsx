@@ -10,6 +10,7 @@ import { AdminLayout } from './layouts/AdminLayout';
 import PatientDashboard from './Patients/pages/patients-dashboard';
 import PatientsAppointments from './Patients/pages/patients-appoinments';
 import PatientProfile from './Patients/pages/patientProfile';
+import ContactUs from './Patients/pages/ContactUs';
 
 import AdminDashboard from './Admins/pages/adminDashboard';
 import QueueManagement from './Admins/pages/queueManagement';
@@ -31,6 +32,7 @@ export default function App() {
         {/* 1. PUBLIC ROUTES (Main Navbar) */}
         <Route path="/" element={<PublicLayout />}>
         <Route index element={<HomePage />} />
+        <Route path="contact" element={<ContactUs />} />
           
         </Route>
 
@@ -39,6 +41,7 @@ export default function App() {
           <Route index element={<PatientDashboard />} />
           <Route path="appointments" element={<PatientsAppointments />} />
            <Route path="profile" element={<PatientProfile />} />
+            <Route path="contact" element={<ContactUs />} /> 
         </Route>
 
         {/* 3. DOCTOR ROUTES (Doctor Sidebar) */}
