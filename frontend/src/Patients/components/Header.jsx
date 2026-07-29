@@ -9,7 +9,7 @@ const PAGE_TITLES = {
   
   '/queue': 'Queue Management',
   '/patient': 'Welcome, Uditha',
-  '/patient/appointments' : 'Manage Appointments',
+  '/patient/appointments' : 'Manage Your Appointments Here',
   '/schedule': 'Schedule Manager',
   '/staff': 'Staff Management',
   '/analytics': 'Analytics',
