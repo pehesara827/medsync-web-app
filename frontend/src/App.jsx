@@ -9,7 +9,11 @@ import { AdminLayout } from './layouts/AdminLayout';
 
 import PatientDashboard from './Patients/pages/patients-dashboard';
 import PatientsAppointments from './Patients/pages/patients-appoinments';
+
 import PatientProfile from './Patients/pages/patientProfile';
+
+import PatientsDoctors from './Patients/pages/patients-doctors';
+
 
 import AdminDashboard from './Admins/pages/adminDashboard';
 import QueueManagement from './Admins/pages/queueManagement';
@@ -38,7 +42,8 @@ export default function App() {
         <Route path="/patient" element={<PatientLayout />}>
           <Route index element={<PatientDashboard />} />
           <Route path="appointments" element={<PatientsAppointments />} />
-           <Route path="profile" element={<PatientProfile />} />
+          <Route path="profile" element={<PatientProfile />} />
+          <Route path="doctors" element={<PatientsDoctors />} />
         </Route>
 
         {/* 3. DOCTOR ROUTES (Doctor Sidebar) */}

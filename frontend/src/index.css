@@ -1,1 +1,29 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+
+:root {
+  font-family: "Outfit", sans-serif;
+}
+
+/* Enable Smooth Scrolling for the Whole Page */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Hide Vertical Scrollbar for the Entire Page */
+/* Chrome, Safari, Opera */
+::-webkit-scrollbar {
+  display: none;
+  width: 0px;
+  background: transparent;
+}
+
+/* Firefox */
+html, body, main {
+  scrollbar-width: none;
+}
+
+/* IE and Edge */
+html, body, main {
+  -ms-overflow-style: none;
+}
