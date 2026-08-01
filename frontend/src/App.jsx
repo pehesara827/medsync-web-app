@@ -35,6 +35,7 @@ export default function App() {
         <Route path="/" element={<PublicLayout />}>
           <Route index element={<HomePage />} />
           <Route path="signup" element={<SignupPage />} />
+          <Route path="contact" element={<ContactUs />} />
         </Route>
 
         {/* Standalone login page (no navbar) */}
