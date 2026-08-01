@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { 
   User, 
   Mail, 
@@ -11,27 +12,92 @@ import {
   Activity, 
   AlertCircle, 
   Heart,
-  Camera
+  Camera,
+  Save,
+  X
 } from 'lucide-react';
 
-
-import { mockPatientData } from "../../data/mockPatientData";
-
 export default function PatientProfile() {
-  
-  const [profile, setProfile] = useState(mockPatientData);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
 
   
+  const [newContact, setNewContact] = useState({ name: '', relation: '', phone: '' });
+
+  // Test User ID (Database eke tiyena patient user UUID ekak danna)
+ 
+  const USER_ID = "37bf4f53-aedf-414a-be0a-786f6ad19b5a";
+
+  
+  const fetchProfile = async () => {
+    try {
+      const response = await axios.get(`http://localhost:5000/api/patient/profile/${USER_ID}`);
+      setProfile(response.data.data);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error loading profile:", error);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setProfile((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Save Profile Changes
+  const handleSaveProfile = async () => {
+    try {
+      const nameParts = profile.fullName.split(' ');
+      const payload = {
+        firstName: nameParts[0] || '',
+        lastName: nameParts.slice(1).join(' ') || '',
+        email: profile.email,
+        phone: profile.phone,
+        dob: profile.dob,
+        gender: profile.gender,
+        address: profile.address
+      };
+
+      await axios.put(`http://localhost:5000/api/patient/profile/${USER_ID}`, payload);
+      alert("Profile updated successfully!");
+      setIsEditing(false);
+      fetchProfile();
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      alert("Failed to update profile.");
+    }
+  };
+
+  
+  const handleAddContactSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`http://localhost:5000/api/patient/profile/${USER_ID}/emergency-contact`, newContact);
+      alert("Emergency contact saved!");
+      setShowContactModal(false);
+      setNewContact({ name: '', relation: '', phone: '' });
+      fetchProfile();
+    } catch (error) {
+      console.error("Error saving contact:", error);
+      alert("Failed to add emergency contact.");
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center font-bold">Loading Patient Profile...</div>;
+  if (!profile) return <div className="p-8 text-center text-red-500 font-bold">Profile not found.</div>;
+
   return (
     <div className="min-h-screen bg-[#F4F7F8] p-4 md:p-8 text-[#252B2D] font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
         
-        
+        {/* Profile Header */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex flex-col sm:flex-row items-center gap-5">
             <div className="relative group">
@@ -66,15 +132,27 @@ export default function PatientProfile() {
             <button className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[#BCC9CD] text-[#252B2D] font-medium hover:bg-[#4CD7F6]/10 transition text-sm">
               <Key size={16} /> Change Password
             </button>
-            <button className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#4CD7F6] text-[#252B2D] font-bold hover:bg-[#3bc0de] shadow-sm transition text-sm">
-              <Edit3 size={16} /> Edit Profile
-            </button>
+
+            {isEditing ? (
+              <button 
+                onClick={handleSaveProfile}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 text-white font-bold hover:bg-emerald-600 shadow-sm transition text-sm"
+              >
+                <Save size={16} /> Save Changes
+              </button>
+            ) : (
+              <button 
+                onClick={() => setIsEditing(true)}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#4CD7F6] text-[#252B2D] font-bold hover:bg-[#3bc0de] shadow-sm transition text-sm"
+              >
+                <Edit3 size={16} /> Edit Profile
+              </button>
+            )}
           </div>
         </div>
 
-        
+        {/* Form Body */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
           
           <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-6">
             <div className="flex items-center gap-2 pb-4 border-b border-[#BCC9CD]/40">
@@ -82,16 +160,17 @@ export default function PatientProfile() {
               <h2 className="text-lg font-bold text-[#252B2D]">Personal Information</h2>
             </div>
 
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-[#3D494C] uppercase tracking-wider mb-2">Full Name</label>
                   <input 
                     type="text" 
                     name="fullName"
+                    disabled={!isEditing}
                     value={profile.fullName} 
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#BCC9CD] bg-slate-50 text-[#252B2D] text-sm focus:outline-none focus:ring-2 focus:ring-[#4CD7F6]/30 focus:border-[#4CD7F6] transition"
+                    className={`w-full px-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
                   />
                 </div>
                 <div>
@@ -99,18 +178,20 @@ export default function PatientProfile() {
                   <input 
                     type="date" 
                     name="dob"
+                    disabled={!isEditing}
                     value={profile.dob} 
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#BCC9CD] bg-slate-50 text-[#252B2D] text-sm focus:outline-none focus:ring-2 focus:ring-[#4CD7F6]/30 focus:border-[#4CD7F6] transition"
+                    className={`w-full px-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-[#3D494C] uppercase tracking-wider mb-2">Gender</label>
                   <select 
                     name="gender"
+                    disabled={!isEditing}
                     value={profile.gender}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#BCC9CD] bg-slate-50 text-[#252B2D] text-sm focus:outline-none focus:ring-2 focus:ring-[#4CD7F6]/30 focus:border-[#4CD7F6] transition"
+                    className={`w-full px-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -125,7 +206,6 @@ export default function PatientProfile() {
                 </div>
               </div>
 
-              
               <div className="pt-4 border-t border-[#BCC9CD]/40 space-y-4">
                 <h3 className="text-xs font-bold text-[#3D494C] uppercase tracking-wider">Contact Details</h3>
                 
@@ -137,9 +217,10 @@ export default function PatientProfile() {
                       <input 
                         type="email" 
                         name="email"
+                        disabled={!isEditing}
                         value={profile.email} 
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#BCC9CD] bg-slate-50 text-[#252B2D] text-sm focus:outline-none focus:ring-2 focus:ring-[#4CD7F6]/30 focus:border-[#4CD7F6] transition"
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
                       />
                     </div>
                   </div>
@@ -151,9 +232,10 @@ export default function PatientProfile() {
                       <input 
                         type="text" 
                         name="phone"
+                        disabled={!isEditing}
                         value={profile.phone} 
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#BCC9CD] bg-slate-50 text-[#252B2D] text-sm focus:outline-none focus:ring-2 focus:ring-[#4CD7F6]/30 focus:border-[#4CD7F6] transition"
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
                       />
                     </div>
                   </div>
@@ -166,9 +248,10 @@ export default function PatientProfile() {
                     <input 
                       type="text" 
                       name="address"
+                      disabled={!isEditing}
                       value={profile.address} 
                       onChange={handleInputChange}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#BCC9CD] bg-slate-50 text-[#252B2D] text-sm focus:outline-none focus:ring-2 focus:ring-[#4CD7F6]/30 focus:border-[#4CD7F6] transition"
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
                     />
                   </div>
                 </div>
@@ -176,7 +259,7 @@ export default function PatientProfile() {
             </form>
           </div>
 
-          
+        
           <div className="space-y-6">
             
             
@@ -186,7 +269,6 @@ export default function PatientProfile() {
                 <h2 className="text-lg font-bold text-[#252B2D]">Medical Overview</h2>
               </div>
 
-              
               <div>
                 <span className="block text-xs font-bold text-[#3D494C] uppercase tracking-wider mb-2">
                   <AlertCircle size={12} className="inline mr-1 text-rose-500" /> Allergies
@@ -200,7 +282,6 @@ export default function PatientProfile() {
                 </div>
               </div>
 
-              
               <div>
                 <span className="block text-xs font-bold text-[#3D494C] uppercase tracking-wider mb-2">
                   Chronic Conditions
@@ -247,14 +328,65 @@ export default function PatientProfile() {
                 ))}
               </div>
 
-              <button className="w-full mt-2 py-2.5 border border-dashed border-[#BCC9CD] rounded-xl text-[#252B2D] hover:bg-[#4CD7F6]/10 hover:border-[#4CD7F6] text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+              <button 
+                onClick={() => setShowContactModal(true)}
+                className="w-full mt-2 py-2.5 border border-dashed border-[#BCC9CD] rounded-xl text-[#252B2D] hover:bg-[#4CD7F6]/10 hover:border-[#4CD7F6] text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+              >
                 <Plus size={14} className="text-[#4CD7F6]" /> Add Contact
               </button>
             </div>
 
           </div>
-
         </div>
+
+      
+        {showContactModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 border border-[#BCC9CD]">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <h3 className="font-bold text-lg">Add Emergency Contact</h3>
+                <button onClick={() => setShowContactModal(false)}><X size={20} /></button>
+              </div>
+              <form onSubmit={handleAddContactSubmit} className="space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-[#3D494C]">Full Name</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={newContact.name} 
+                    onChange={(e) => setNewContact({...newContact, name: e.target.value})}
+                    className="w-full px-3 py-2 rounded-lg border border-[#BCC9CD] text-sm mt-1" 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-[#3D494C]">Relationship</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="e.g. Spouse, Brother"
+                    value={newContact.relation} 
+                    onChange={(e) => setNewContact({...newContact, relation: e.target.value})}
+                    className="w-full px-3 py-2 rounded-lg border border-[#BCC9CD] text-sm mt-1" 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-[#3D494C]">Phone Number</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={newContact.phone} 
+                    onChange={(e) => setNewContact({...newContact, phone: e.target.value})}
+                    className="w-full px-3 py-2 rounded-lg border border-[#BCC9CD] text-sm mt-1" 
+                  />
+                </div>
+                <div className="pt-2 flex justify-end gap-2">
+                  <button type="button" onClick={() => setShowContactModal(false)} className="px-4 py-2 rounded-lg border text-sm font-medium">Cancel</button>
+                  <button type="submit" className="px-4 py-2 rounded-lg bg-[#4CD7F6] text-[#252B2D] font-bold text-sm">Save Contact</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
