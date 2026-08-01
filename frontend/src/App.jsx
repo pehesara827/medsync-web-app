@@ -11,14 +11,16 @@ import PatientDashboard from './Patients/pages/patients-dashboard';
 import PatientsAppointments from './Patients/pages/patients-appoinments';
 import PatientProfile from './Patients/pages/patientProfile';
 import ContactUs from './Patients/pages/ContactUs';
+import PatientsDoctors from './Patients/pages/patients-doctors';
 
 import AdminDashboard from './Admins/pages/adminDashboard';
 import QueueManagement from './Admins/pages/queueManagement';
 
-
 import DoctorDashboard from './Doctors/pages/doctorsDashboard';
 
 import HomePage from './PublicSite/pages/Home';
+import SignupPage from './PublicSite/pages/Signup';
+import LoginPage from './PublicSite/pages/Login';
 
 function NotFound() {
   return <div className="p-8 text-center text-2xl font-bold">404 - Page Not Found</div>;
@@ -31,17 +33,20 @@ export default function App() {
 
         {/* 1. PUBLIC ROUTES (Main Navbar) */}
         <Route path="/" element={<PublicLayout />}>
-        <Route index element={<HomePage />} />
-        <Route path="contact" element={<ContactUs />} />
-          
+          <Route index element={<HomePage />} />
+          <Route path="signup" element={<SignupPage />} />
         </Route>
+
+        {/* Standalone login page (no navbar) */}
+        <Route path="/login" element={<LoginPage />} />
 
         {/* 2. PATIENT ROUTES (Patient Sidebar) */}
         <Route path="/patient" element={<PatientLayout />}>
           <Route index element={<PatientDashboard />} />
           <Route path="appointments" element={<PatientsAppointments />} />
-           <Route path="profile" element={<PatientProfile />} />
-            <Route path="contact" element={<ContactUs />} /> 
+          <Route path="profile" element={<PatientProfile />} />
+          <Route path="contact" element={<ContactUs />} /> 
+          <Route path="doctors" element={<PatientsDoctors />} />
         </Route>
 
         {/* 3. DOCTOR ROUTES (Doctor Sidebar) */}
