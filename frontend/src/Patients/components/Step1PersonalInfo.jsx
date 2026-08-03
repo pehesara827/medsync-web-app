@@ -114,21 +114,6 @@ export default function Step1PersonalInfo({ formData, handleChange, nextStep }) 
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
             />
           </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-slate-700">Preferred Clinic Branch</span>
-            <select
-              name="preferred_branch_id"
-              value={formData.preferred_branch_id || ''}
-              onChange={handleChange}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-            >
-              <option value="">Select nearest clinic...</option>
-              <option value="downtown">Downtown Clinic</option>
-              <option value="uptown">Uptown Clinic</option>
-              <option value="suburban">Suburban Health Center</option>
-            </select>
-          </label>
         </div>
 
         <div className="mt-10 flex justify-center">

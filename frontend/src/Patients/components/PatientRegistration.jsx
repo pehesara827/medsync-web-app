@@ -11,7 +11,7 @@ const stepLabels = [
   { label: 'Credentials & Terms', key: 'credentials' },
 ];
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 export default function PatientRegistration() {
   const navigate = useNavigate();
@@ -28,7 +28,6 @@ export default function PatientRegistration() {
     phone_number: '',
     email: '',
     national_id_passport: '',
-    preferred_branch_id: '',
     emergency_contact_name: '',
     emergency_contact_rel: '',
     emergency_contact_phone_country_code: '+1',
@@ -57,7 +56,7 @@ export default function PatientRegistration() {
 
   const handleNext = () => {
     const requiredFieldsByStep = {
-      1: ['first_name', 'last_name', 'date_of_birth', 'gender', 'phone_number', 'email', 'national_id_passport', 'preferred_branch_id'],
+      1: ['first_name', 'last_name', 'date_of_birth', 'gender', 'phone_number', 'email', 'national_id_passport'],
       2: ['emergency_contact_name', 'emergency_contact_rel', 'emergency_contact_phone'],
       3: ['username', 'password_hash', 'confirm_password', 'terms_accepted'],
     };
@@ -127,43 +126,43 @@ export default function PatientRegistration() {
         profilePictureUrl = await uploadProfilePicture(formData.profile_picture);
       }
 
-      // Step B: Build the payload for the backend
-      const payload = {
-        // Credentials
-        username: formData.username,
-        email: formData.email,
-        password_hash: formData.password_hash,
-        terms_accepted: formData.terms_accepted,
-
-        // Profile fields
-        profile_picture_url: profilePictureUrl,
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        date_of_birth: formData.date_of_birth,
-        gender: formData.gender,
-        phone_number: `${formData.phone_country_code}${formData.phone_number}`,
-        national_id_passport: formData.national_id_passport,
-        emergency_contact_name: formData.emergency_contact_name,
-        emergency_contact_rel: formData.emergency_contact_rel,
-        emergency_contact_phone: `${formData.emergency_contact_phone_country_code}${formData.emergency_contact_phone}`,
-        alt_contact_phone: formData.alt_contact_phone || null,
-        home_address: formData.home_address || null,
-        blood_group: formData.blood_group || null,
-      };
-
-      // Step C: Call the backend API
-      const response = await fetch(`${API_BASE}/auth/register/patient`, {
+      // Step B: Register via the backend API.
+      // The backend uses the Supabase service role to create the auth user with
+      // email_confirm=true, so no email confirmation is required.
+      const response = await fetch(`${API_BASE_URL}/auth/register/patient`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          // Credentials
+          username: formData.username,
+          email: formData.email,
+          password: formData.password_hash,
+          terms_accepted: formData.terms_accepted,
+
+          // Profile fields
+          profile_picture_url: profilePictureUrl,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          date_of_birth: formData.date_of_birth,
+          gender: formData.gender,
+          phone_number: `${formData.phone_country_code}${formData.phone_number}`,
+          national_id_passport: formData.national_id_passport,
+          emergency_contact_name: formData.emergency_contact_name,
+          emergency_contact_rel: formData.emergency_contact_rel,
+          emergency_contact_phone: `${formData.emergency_contact_phone_country_code}${formData.emergency_contact_phone}`,
+          alt_contact_phone: formData.alt_contact_phone || null,
+          home_address: formData.home_address || null,
+          blood_group: formData.blood_group || null,
+        }),
       });
 
-      const responseData = await response.json();
+      const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(responseData.message || 'Registration failed. Please try again.');
+        // Handle duplicate key violations (409) and other backend errors
+        throw new Error(result.message || 'Registration failed. Please try again.');
       }
 
       // Success — redirect to login page
