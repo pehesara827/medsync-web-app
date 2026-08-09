@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom';
+import { QrCode } from 'lucide-react';
 import { MOCK_APPOINTMENTS } from '../../MockData/mockAppoinmentData';
 
 /**
@@ -22,6 +24,12 @@ const getStatusBadgeClasses = (status) => {
 };
 
 export default function AppointmentsTable({ appointments = MOCK_APPOINTMENTS }) {
+  const navigate = useNavigate();
+
+  const handleViewPass = (appointmentId) => {
+    navigate(`/patient/appointments/${appointmentId}`);
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] p-4 md:p-6 w-full">
       <div className="mb-6">
@@ -81,6 +89,15 @@ export default function AppointmentsTable({ appointments = MOCK_APPOINTMENTS }) 
                 <span className="text-slate-500 font-medium text-sm block truncate">{appointment.consultationType}</span>
               </div>
             </div>
+
+            {/* View Pass Action */}
+            <button
+              onClick={() => handleViewPass(appointment.id)}
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#00b8e6]/10 text-[#00b8e6] font-semibold text-xs hover:bg-[#00b8e6]/20 transition"
+            >
+              <QrCode size={14} />
+              View Pass
+            </button>
           </div>
         ))}
       </div>
@@ -95,6 +112,7 @@ export default function AppointmentsTable({ appointments = MOCK_APPOINTMENTS }) 
               <th className="pb-4 font-bold">Date & Time</th>
               <th className="pb-4 font-bold">Consultation Type</th>
               <th className="pb-4 font-bold">Status</th>
+              <th className="pb-4 font-bold">Pass</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -138,6 +156,15 @@ export default function AppointmentsTable({ appointments = MOCK_APPOINTMENTS }) 
                   >
                     {appointment.status}
                   </span>
+                </td>
+                <td className="py-4 whitespace-nowrap">
+                  <button
+                    onClick={() => handleViewPass(appointment.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00b8e6]/10 text-[#00b8e6] font-semibold text-xs hover:bg-[#00b8e6]/20 transition"
+                  >
+                    <QrCode size={13} />
+                    View Pass
+                  </button>
                 </td>
               </tr>
             ))}

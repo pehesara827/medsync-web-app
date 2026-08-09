@@ -1,22 +1,175 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../../../supabaseClient';
 import AppointmentFilterBar from '../components/AppointmentFilterBar';
 import AppointmentsTable from '../components/AppointmentsTable';
-import { MOCK_APPOINTMENTS } from '../../MockData/mockAppoinmentData';
 
 export default function PatientsAppointments() {
   const [activeFilter, setActiveFilter] = useState('All');
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [patientId, setPatientId] = useState(null);
+
+  // Resolve patient ID on mount
+  useEffect(() => {
+    const resolvePatientId = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData?.session?.user;
+        if (!user) {
+          setError('You must be logged in to view appointments.');
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('patient_profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+        if (!profile) {
+          setError('No patient profile found for this account.');
+          return;
+        }
+
+        setPatientId(profile.id);
+      } catch (err) {
+        setError(`Failed to load patient profile: ${err.message}`);
+      }
+    };
+
+    resolvePatientId();
+  }, []);
+
+  // Fetch appointments when patient ID is available
+  useEffect(() => {
+    if (!patientId) return;
+
+    const fetchAppointments = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const { data, error: apptError } = await supabase
+          .from('appointments')
+          .select(`
+            id,
+            appointment_date,
+            status,
+            booking_type,
+            doctor_profiles (
+              first_name,
+              last_name,
+              specialization
+            ),
+            doctor_schedules (
+              start_time,
+              end_time
+            ),
+            payments (
+              payment_status
+            ),
+            beneficiaries (
+              full_name,
+              relationship
+            )
+          `)
+          .eq('patient_id', patientId)
+          .order('appointment_date', { ascending: false });
+
+        if (apptError) throw apptError;
+        setAppointments(data || []);
+      } catch (err) {
+        setError(`Failed to load appointments: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAppointments();
+  }, [patientId]);
+
+  // Format time from HH:MM:SS to 12-hour format
+  const formatTime = (timeStr) => {
+    if (!timeStr) return '';
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+    return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+  };
+
+  // Format date
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '—';
+    const date = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return dateStr;
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  // Transform appointments for table display
+  const transformedAppointments = useMemo(() => {
+    return appointments.map((appt) => {
+      const doctor = appt.doctor_profiles || {};
+      const schedule = appt.doctor_schedules || {};
+      const payment = appt.payments || {};
+      const beneficiary = appt.beneficiaries || null;
+
+      let patientName = 'Self';
+      if (appt.booking_type === 'BENEFICIARY' && beneficiary) {
+        patientName = beneficiary.relationship
+          ? `${beneficiary.full_name} (${beneficiary.relationship})`
+          : beneficiary.full_name;
+      }
+
+      return {
+        id: appt.id,
+        patientName,
+        doctorName: `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim(),
+        specialization: doctor.specialization || '—',
+        appointmentDate: formatDate(appt.appointment_date),
+        timeSlot: formatTime(schedule.start_time),
+        status: appt.status,
+        paymentStatus: payment.payment_status || 'UNPAID',
+      };
+    });
+  }, [appointments]);
 
   // Filter appointments based on the active filter tab
   const filteredAppointments = useMemo(() => {
-    return MOCK_APPOINTMENTS.filter((appointment) => {
-      if (activeFilter === 'All') return true;
-      if (activeFilter === 'Upcoming') {
-        // 'Upcoming' includes both 'Upcoming' and 'Scheduled' statuses
-        return appointment.status === 'Upcoming' || appointment.status === 'Scheduled';
-      }
-      return appointment.status === activeFilter;
-    });
-  }, [activeFilter]);
+    if (activeFilter === 'All') return transformedAppointments;
+    if (activeFilter === 'Upcoming') {
+      // 'Upcoming' includes both 'Upcoming' and 'Scheduled' statuses
+      return transformedAppointments.filter(
+        (appt) => appt.status === 'Upcoming' || appt.status === 'Scheduled' || appt.status === 'PENDING'
+      );
+    }
+    return transformedAppointments.filter((appt) => appt.status === activeFilter);
+  }, [activeFilter, transformedAppointments]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-[#00b8e6] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading appointments...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center p-8 bg-red-50 rounded-2xl border border-red-200 max-w-md">
+          <p className="text-red-700">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 w-full px-4 md:px-6 lg:px-8">
@@ -25,7 +178,7 @@ export default function PatientsAppointments() {
       <AppointmentFilterBar
         onFilterChange={setActiveFilter}
         onAddNew={() => alert('Add New Appointment clicked')}
-        appointments={MOCK_APPOINTMENTS}
+        appointments={transformedAppointments}
       />
 
       {/* Appointment Display Area */}

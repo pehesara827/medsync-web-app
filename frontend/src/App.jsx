@@ -12,6 +12,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 import PatientDashboard from './Patients/pages/patients-dashboard';
 import PatientsAppointments from './Patients/pages/patients-appoinments';
+import AppointmentConfirmationPage from './Patients/pages/AppointmentConfirmationPage';
+import QRCodePage from './Patients/pages/QRCodePage';
 
 import PatientProfile from './Patients/pages/patientProfile';
 
@@ -51,6 +53,8 @@ export default function App() {
           <Route path="/patient" element={<PatientLayout />}>
             <Route index element={<PatientDashboard />} />
             <Route path="appointments" element={<PatientsAppointments />} />
+            <Route path="appointments/:appointmentId" element={<AppointmentConfirmationPage />} />
+            <Route path="qr-codes" element={<QRCodePage />} />
             <Route path="profile" element={<PatientProfile />} />
             <Route path="doctors" element={<PatientsDoctors />} />
           </Route>

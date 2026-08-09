@@ -1,11 +1,17 @@
 
+import { useState } from 'react';
 import { Star, MapPin, Clock, MoreHorizontal } from 'lucide-react';
+import BookAppointmentModal from './BookAppointmentModal';
 
 export default function DoctorCard({ doctor }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalKey, setModalKey] = useState(0);
+  
   if (!doctor) return null;
 
   return (
-    <div className="w-full bg-white rounded-xl p-4 border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col gap-3">
+    <>
+      <div className="w-full bg-white rounded-xl p-4 border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col gap-3">
       <div className="flex items-start justify-between">
         <div className="relative">
           <img
@@ -42,7 +48,10 @@ export default function DoctorCard({ doctor }) {
       </div>
 
       <div className="flex items-center justify-between pt-1">
-        <button className="flex-1 bg-[#00b0d8] text-white text-xs font-bold py-2.5 rounded-xl hover:bg-[#009bbf] transition-colors">
+        <button 
+          onClick={() => { setModalKey((k) => k + 1); setIsModalOpen(true); }}
+          className="flex-1 bg-[#00b8e6] text-white text-xs font-bold py-2.5 rounded-xl hover:bg-[#00a3cc] transition-colors"
+        >
           Book Now
         </button>
         <button className="p-2.5 text-slate-400 hover:text-slate-600">
@@ -50,5 +59,9 @@ export default function DoctorCard({ doctor }) {
         </button>
       </div>
     </div>
+
+    {/* Booking Modal */}
+    <BookAppointmentModal key={modalKey} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </>
   );
 }

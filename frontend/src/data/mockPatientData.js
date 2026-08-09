@@ -8,7 +8,7 @@ export const mockPatientData = {
   bloodType: "O+",
   email: "uditha@example.com",
   phone: "+1 (555) 019-2834",
-  address: "128 Clinical Way, MedCity, NY 10001",
+  home_address: "128 Clinical Way, MedCity, NY 10001",
   isVerified: true,
   avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300",
   allergies: [

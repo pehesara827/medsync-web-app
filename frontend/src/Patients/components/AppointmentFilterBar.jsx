@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { getAppointmentCounts } from '../../MockData/mockAppoinmentData';
 import BookNewAppointmentButton from './BookNewButton';
+import BookAppointmentModal from './BookAppointmentModal';
 
 export default function AppointmentFilterBar({
   onFilterChange,
@@ -8,6 +9,8 @@ export default function AppointmentFilterBar({
   appointments = [],
 }) {
   const [activeTab, setActiveTab] = useState('All');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalKey, setModalKey] = useState(0);
 
   // Compute counts dynamically from the appointments data so they always
   // match the mock data for every filter label.
@@ -28,6 +31,16 @@ export default function AppointmentFilterBar({
   const handleTabClick = (tabName) => {
     setActiveTab(tabName);
     if (onFilterChange) onFilterChange(tabName);
+  };
+
+  const handleAddNewClick = () => {
+    setModalKey((k) => k + 1);
+    setIsModalOpen(true);
+    if (onAddNew) onAddNew();
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
   };
 
   return (
@@ -60,10 +73,13 @@ export default function AppointmentFilterBar({
         <div className="flex-shrink-0">
           <BookNewAppointmentButton
             children="Add New Appointment"
-            onClick={onAddNew}
+            onClick={handleAddNewClick}
           />
         </div>
       </div>
+
+      {/* Booking Modal */}
+      <BookAppointmentModal key={modalKey} isOpen={isModalOpen} onClose={handleCloseModal} />
     </div>
   );
 }

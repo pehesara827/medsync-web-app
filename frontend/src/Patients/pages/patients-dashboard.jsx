@@ -1,10 +1,15 @@
+import { useState } from 'react';
 import BookNewAppointmentButton from '../components/BookNewButton';
 import AppointmentsCarousel from '../components/AppointmentsCarousel';
 import FavoriteDoctorsCarousel from '../components/FavoriteDoctorsCarousel';
 import QuickStats from '../components/QuickStats';
 import RecentActivity from '../components/RecentActivity';
+import BookAppointmentModal from '../components/BookAppointmentModal';
 
 export default function PatientsDashboard() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalKey, setModalKey] = useState(0);
+
   return (
     <div className="flex-1 w-full px-0 md:px-0">
       
@@ -19,9 +24,12 @@ export default function PatientsDashboard() {
           </p>
         </div>
         <div className="flex-shrink-0">
-          <BookNewAppointmentButton />
+          <BookNewAppointmentButton onClick={() => { setModalKey((k) => k + 1); setIsModalOpen(true); }} />
         </div>
       </div>
+
+      {/* Booking Modal */}
+      <BookAppointmentModal key={modalKey} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
 
       {/* Main 2-Column Dashboard Grid Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">

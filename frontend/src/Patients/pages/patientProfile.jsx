@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { 
   User, 
   Mail, 
@@ -165,8 +165,8 @@ export default function PatientProfile() {
                     <MapPin size={16} className="absolute left-3.5 text-[#3D494C]" />
                     <input 
                       type="text" 
-                      name="address"
-                      value={profile.address} 
+                      name="home_address"
+                      value={profile.home_address} 
                       onChange={handleInputChange}
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#BCC9CD] bg-slate-50 text-[#252B2D] text-sm focus:outline-none focus:ring-2 focus:ring-[#4CD7F6]/30 focus:border-[#4CD7F6] transition"
                     />

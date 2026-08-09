@@ -14,10 +14,12 @@ app.use(express.urlencoded({ extended: true }));
 
 import userRoutes from './routes/userRoutes.js';
 import patientRoutes from './routes/patientRoutes.js';
+import appointmentRoutes from './routes/appointmentRoutes.js';
 
 // Routes
 app.use('/api/users', userRoutes);
 app.use('/api/auth', patientRoutes);
+app.use('/api/appointments', appointmentRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
