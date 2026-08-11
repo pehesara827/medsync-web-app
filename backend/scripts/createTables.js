@@ -86,12 +86,27 @@ CREATE TABLE IF NOT EXISTS public.payments (
         REFERENCES public.appointments(id) ON DELETE CASCADE
 );
 
--- 5. Performance Indexes
+-- 5. Create Patient Favorite Doctors Table
+-- Stores patient favorites for doctors with unique pairs and fast patient lookup
+CREATE TABLE IF NOT EXISTS public.patient_favorite_doctors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL,
+    doctor_id UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT patient_doctor_unique UNIQUE (patient_id, doctor_id),
+    CONSTRAINT patient_favorite_doctors_patient_id_fkey FOREIGN KEY (patient_id)
+        REFERENCES public.patient_profiles(id) ON DELETE CASCADE,
+    CONSTRAINT patient_favorite_doctors_doctor_id_fkey FOREIGN KEY (doctor_id)
+        REFERENCES public.doctor_profiles(id) ON DELETE CASCADE
+);
+
+-- 6. Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_beneficiaries_patient ON public.beneficiaries(patient_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_doctor_date ON public.doctor_schedules(doctor_id, available_date);
 CREATE INDEX IF NOT EXISTS idx_appointments_patient ON public.appointments(patient_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_doctor ON public.appointments(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_payments_appointment ON public.payments(appointment_id);
+CREATE INDEX IF NOT EXISTS idx_patient_favorite_doctors_patient ON public.patient_favorite_doctors(patient_id);
 `;
 
 const verifySql = `
@@ -113,7 +128,7 @@ LEFT JOIN information_schema.constraint_column_usage ccu
     ON ccu.constraint_schema = tc.constraint_schema 
     AND ccu.constraint_name = tc.constraint_name
 WHERE t.table_schema = 'public'
-    AND t.table_name IN ('beneficiaries', 'doctor_schedules', 'appointments', 'payments')
+    AND t.table_name IN ('beneficiaries', 'doctor_schedules', 'appointments', 'payments', 'patient_favorite_doctors')
 GROUP BY t.table_name
 ORDER BY t.table_name;
 `;
@@ -148,7 +163,7 @@ async function main() {
       console.log('WARNING: No tables found in the public schema!');
     }
 
-    const expectedTables = ['beneficiaries', 'doctor_schedules', 'appointments', 'payments'];
+    const expectedTables = ['beneficiaries', 'doctor_schedules', 'appointments', 'payments', 'patient_favorite_doctors'];
     const foundTables = verifyResult.rows.map((r) => r.table_name);
 
     for (const table of expectedTables) {
@@ -176,6 +191,8 @@ async function main() {
       { table: 'appointments', expected: 'patient_id -> patient_profiles.id' },
       { table: 'appointments', expected: 'doctor_id -> doctor_profiles.id' },
       { table: 'payments', expected: 'appointment_id -> appointments.id' },
+      { table: 'patient_favorite_doctors', expected: 'patient_id -> patient_profiles.id' },
+      { table: 'patient_favorite_doctors', expected: 'doctor_id -> doctor_profiles.id' },
     ];
 
     for (const check of fkChecks) {

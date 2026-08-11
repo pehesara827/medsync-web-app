@@ -5,33 +5,33 @@ export default function Step3Credentials({ formData, handleChange, prevStep, isS
 
   return (
     <div className="space-y-8">
-      <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="space-y-6">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">CREATE YOUR ACCOUNT CREDENTIALS</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">CREATE YOUR ACCOUNT CREDENTIALS</h2>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-1">
             <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Username / Portal Login ID</span>
+              <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Username / Portal Login ID</span>
               <input
                 name="username"
                 value={formData.username || ''}
                 onChange={handleChange}
                 placeholder="Enter desired username"
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
             </label>
 
             <label className="block relative">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Create Password</span>
+              <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Create Password</span>
               <input
                 name="password_hash"
                 type={showPassword ? 'text' : 'password'}
                 value={formData.password_hash || ''}
                 onChange={handleChange}
                 placeholder="Minimum 8 characters"
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pr-12 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pr-12 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
               <button
                 type="button"
@@ -54,23 +54,23 @@ export default function Step3Credentials({ formData, handleChange, prevStep, isS
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Confirm Password</span>
+              <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Confirm Password</span>
               <input
                 name="confirm_password"
                 type={showPassword ? 'text' : 'password'}
                 value={formData.confirm_password || ''}
                 onChange={handleChange}
                 placeholder="Re-enter password"
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
             </label>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-            <div className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
+            <div className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
               TERMS OF SERVICE & DATA CONSENT
             </div>
-            <div className="max-h-40 overflow-y-auto rounded-3xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
+            <div className="max-h-40 overflow-y-auto rounded-3xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
               <p>
                 By registering for the Medical Portal, you consent to the secure storage and processing of your personal health information in accordance with HIPAA regulations. We employ 256-bit encryption to safeguard your data.
               </p>
@@ -82,7 +82,7 @@ export default function Step3Credentials({ formData, handleChange, prevStep, isS
               </p>
             </div>
 
-            <label className="mt-5 inline-flex items-start gap-3 text-sm text-slate-700">
+            <label className="mt-5 inline-flex items-start gap-3 text-sm text-slate-700 dark:text-slate-200">
               <input
                 type="checkbox"
                 name="terms_accepted"

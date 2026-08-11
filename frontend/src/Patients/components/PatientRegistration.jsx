@@ -195,12 +195,12 @@ export default function PatientRegistration() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 py-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-100 py-10 px-4 sm:px-6 lg:px-8 dark:bg-slate-950">
       <div className="mx-auto max-w-4xl">
-        <div className="rounded-[32px] bg-white p-8 shadow-sm">
+        <div className="rounded-[32px] bg-white p-8 shadow-sm dark:bg-slate-900">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-slate-900">Patient Registration</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Patient Registration</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
               Please enter your details to create your medical portal account.
             </p>
           </div>
@@ -216,10 +216,10 @@ export default function PatientRegistration() {
                   <div
                     className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold transition ${
                       isCompleted
-                        ? 'border-slate-200 bg-slate-100 text-slate-400'
+                        ? 'border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'
                         : isActive
                         ? 'border-cyan-500 bg-cyan-500 text-white'
-                        : 'border-slate-200 bg-white text-slate-500'
+                        : 'border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                     }`}
                   >
                     {isCompleted ? '✓' : stepNumber}

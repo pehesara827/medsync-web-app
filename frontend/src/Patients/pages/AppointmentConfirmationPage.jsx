@@ -84,7 +84,10 @@ export default function AppointmentConfirmationPage() {
             doctor_profiles (
               first_name,
               last_name,
-              specialization
+              specialization,
+              specialties (
+                name
+              )
             ),
             doctor_schedules (
               start_time
@@ -139,7 +142,7 @@ export default function AppointmentConfirmationPage() {
           verificationCode: generateVerificationCode(appointment.id),
           patientName: patientName || '—',
           doctorName: `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim() || '—',
-          specialization: doctor.specialization || '—',
+          specialization: doctor.specialties?.name || doctor.specialization || '—',
           appointmentDate: appointment.appointment_date || '',
           timeSlot: formatTime(schedule.start_time),
           paymentStatus: mapPaymentStatus(payment.payment_status),
@@ -169,11 +172,11 @@ export default function AppointmentConfirmationPage() {
 
   if (error || !passData) {
     return (
-      <div className="flex-1 w-full flex flex-col items-center justify-center py-24 px-4">
-        <div className="w-full max-w-md rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+      <div className="flex-1 w-full flex flex-col items-center justify-center py-24 px-4 bg-white dark:bg-slate-900">
+        <div className="w-full max-w-md rounded-2xl border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-950 p-6 text-center">
           <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-slate-800">Unable to load pass</h3>
-          <p className="text-sm text-slate-600 mt-1">{error || 'Appointment not found.'}</p>
+          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Unable to load pass</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{error || 'Appointment not found.'}</p>
           <button
             onClick={() => navigate('/patient/appointments')}
             className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00b8e6] text-white font-semibold text-sm hover:bg-[#00a3cc] transition"
@@ -191,14 +194,14 @@ export default function AppointmentConfirmationPage() {
       {/* Page Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Appointment Pass</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100">Appointment Pass</h1>
           <p className="text-[#00b8e6] font-medium text-sm mt-1">
             Your digital check-in pass
           </p>
         </div>
         <button
           onClick={() => navigate('/patient/appointments')}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition"
         >
           <ArrowLeft size={16} />
           Back

@@ -22,7 +22,7 @@ export default function AppointmentFilterBar({
   // Tab definitions with dynamic counts
   const tabs = [
     { name: 'All', count: counts.All },
-    { name: 'Upcoming', count: counts.Upcoming },
+    { name: 'Scheduled', count: counts.Upcoming },
     { name: 'Completed', count: counts.Completed },
     { name: 'Waitlist', count: counts.Waitlist },
     { name: 'Cancelled', count: counts.Cancelled },
@@ -44,11 +44,11 @@ export default function AppointmentFilterBar({
   };
 
   return (
-    <div className="w-full bg-white rounded-2xl p-3 md:p-3.5 border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] select-none">
+    <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-3 md:p-3.5 border border-slate-100 dark:border-slate-700 shadow-[0_4px_20px_rgba(0,0,0,0.03)] select-none">
       {/* Status Filter Tabs + Add New Appointment Button */}
       <div className="flex items-center gap-3">
         {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1 bg-[#f1f5f9] p-1.5 rounded-xl overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] flex-1 min-w-0">
+        <div className="flex items-center gap-1 bg-[#f1f5f9] dark:bg-slate-700/60 p-1.5 rounded-xl overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] flex-1 min-w-0">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.name;
             return (
@@ -59,7 +59,7 @@ export default function AppointmentFilterBar({
                 className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-bold transition-all duration-200 whitespace-nowrap flex items-center gap-1 ${
                   isActive
                     ? 'bg-[#00b0d8] text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900 bg-transparent'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 bg-transparent'
                 }`}
               >
                 <span>{tab.name}</span>

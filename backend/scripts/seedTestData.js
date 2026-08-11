@@ -22,16 +22,23 @@ async function main() {
     console.log('Connected.\n');
 
     // 1. Insert a test doctor (using the first patient's user_id as the doctor's user_id for simplicity)
+    // Look up the Cardiology specialty_id
+    const specialtyRes = await client.query(`
+      SELECT id, name FROM public.specialties WHERE name = 'Cardiology';
+    `);
+    const specialtyId = specialtyRes.rows[0]?.id;
+
     const doctorRes = await client.query(`
       INSERT INTO public.doctor_profiles (
-        user_id, first_name, last_name, medical_license_no, specialization, experience_years, is_approved
+        user_id, first_name, last_name, medical_license_no, specialization, specialty_id, experience_years, is_approved, doctor_image
       ) VALUES (
         '05deced5-e869-4b38-bda4-3faca83c0a23',
-        'Sarah', 'Chen', 'LIC-2024-001', 'Cardiology', 12, true
+        'Sarah', 'Chen', 'LIC-2024-001', 'Cardiology', $1, 12, true,
+        'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300'
       )
       ON CONFLICT (medical_license_no) DO NOTHING
       RETURNING id, first_name, last_name, specialization;
-    `);
+    `, [specialtyId]);
 
     let doctorId;
     if (doctorRes.rows.length > 0) {

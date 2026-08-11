@@ -28,11 +28,11 @@ export default function PatientProfile() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F7F8] p-4 md:p-8 text-[#252B2D] font-sans">
+    <div className="min-h-screen bg-[#F4F7F8] p-4 md:p-8 text-[#252B2D] font-sans dark:bg-slate-950 dark:text-slate-100">
       <div className="max-w-6xl mx-auto space-y-6">
         
         
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 flex flex-col md:flex-row items-center justify-between gap-6 dark:bg-slate-900 dark:border-slate-700">
           <div className="flex flex-col sm:flex-row items-center gap-5">
             <div className="relative group">
               <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-[#4CD7F6] shadow-md">
@@ -76,7 +76,7 @@ export default function PatientProfile() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           
-          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-6">
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-6 dark:bg-slate-900 dark:border-slate-700">
             <div className="flex items-center gap-2 pb-4 border-b border-[#BCC9CD]/40">
               <User className="text-[#4CD7F6]" size={20} />
               <h2 className="text-lg font-bold text-[#252B2D]">Personal Information</h2>
@@ -180,7 +180,7 @@ export default function PatientProfile() {
           <div className="space-y-6">
             
             
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-5">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-5 dark:bg-slate-900 dark:border-slate-700">
               <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40">
                 <Activity className="text-[#4CD7F6]" size={20} />
                 <h2 className="text-lg font-bold text-[#252B2D]">Medical Overview</h2>
@@ -222,7 +222,7 @@ export default function PatientProfile() {
             </div>
 
             
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-4">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-4 dark:bg-slate-900 dark:border-slate-700">
               <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40">
                 <Phone className="text-[#4CD7F6]" size={20} />
                 <h2 className="text-lg font-bold text-[#252B2D]">Emergency Contacts</h2>

@@ -20,6 +20,15 @@ const client = new Client({
 const PATIENT_ID = `(SELECT id FROM public.patient_profiles WHERE user_id = auth.uid())`;
 
 const policies = [
+  // ── specialties ───────────────────────────────────────────────────
+  {
+    table: 'specialties',
+    name: 'specialties_select_all',
+    cmd: 'SELECT',
+    using: `true`,
+    withCheck: null,
+  },
+
   // ── patient_profiles ──────────────────────────────────────────────
   {
     table: 'patient_profiles',
@@ -137,13 +146,14 @@ async function main() {
       FROM pg_policies
       WHERE schemaname = 'public'
         AND tablename IN (
-          'patient_profiles', 'beneficiaries', 'doctor_profiles',
+          'specialties', 'patient_profiles', 'beneficiaries', 'doctor_profiles',
           'doctor_schedules', 'appointments', 'payments'
         )
       ORDER BY tablename, policyname;
     `);
     for (const row of verify.rows) {
-      console.log(`  ${row.tablename} / ${row.policyname} (${row.cmd}) -> ${row.roles.join(', ')}`);
+      const roles = Array.isArray(row.roles) ? row.roles.join(', ') : String(row.roles);
+      console.log(`  ${row.tablename} / ${row.policyname} (${row.cmd}) -> ${roles}`);
     }
 
   } catch (error) {

@@ -160,7 +160,11 @@ export const getAppointmentById = async (appointmentId) => {
         last_name,
         specialization,
         experience_years,
-        is_approved
+        is_approved,
+        specialties (
+          id,
+          name
+        )
       ),
       doctor_schedules (
         id,
@@ -193,9 +197,34 @@ export const getAppointmentById = async (appointmentId) => {
 };
 
 /**
+ * Computes the number of patients ahead of a given appointment.
+ * Counts PENDING/CONFIRMED appointments for the same doctor on the same date
+ * that were created before this appointment.
+ *
+ * @param {string} appointmentId - UUID of the appointment
+ * @param {string} doctorId - UUID of the doctor
+ * @param {string} appointmentDate - Date string (YYYY-MM-DD)
+ * @param {string} createdAt - ISO timestamp of the appointment creation
+ * @returns {Promise<number>} Number of patients ahead
+ */
+export const getPatientsAhead = async (appointmentId, doctorId, appointmentDate, createdAt) => {
+  const { count, error } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('doctor_id', doctorId)
+    .eq('appointment_date', appointmentDate)
+    .in('status', ['PENDING', 'CONFIRMED'])
+    .neq('id', appointmentId)
+    .lt('created_at', createdAt);
+
+  if (error) throw error;
+  return count || 0;
+};
+
+/**
  * Retrieves all appointments for a specific patient (account owner).
  * Includes both SELF and BENEFICIARY bookings.
- * 
+ *
  * @param {string} patientId - UUID of the patient profile
  * @returns {Promise<Array>} Array of appointment objects
  */
@@ -209,7 +238,12 @@ export const getAppointmentsByPatient = async (patientId) => {
         id,
         first_name,
         last_name,
-        specialization
+        specialization,
+        doctor_image,
+        specialties (
+          id,
+          name
+        )
       ),
       doctor_schedules (
         id,
@@ -231,6 +265,7 @@ export const getAppointmentsByPatient = async (patientId) => {
     `
     )
     .eq('patient_id', patientId)
+    .order('updated_at', { ascending: false })
     .order('appointment_date', { ascending: false })
     .order('created_at', { ascending: false });
 

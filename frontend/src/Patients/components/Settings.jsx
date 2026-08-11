@@ -1,13 +1,14 @@
 import { useState } from 'react';
+import { useDarkMode } from '../../context/useDarkMode';
 
 // Individual setting row with a toggle switch
 function SettingToggle({ label, description, enabled, onChange }) {
   return (
-    <div className="flex items-start justify-between py-3 px-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
+    <div className="flex items-start justify-between py-3 px-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
       <div className="flex-1 pr-3">
-        <p className="text-sm font-medium text-slate-800">{label}</p>
+        <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{label}</p>
         {description && (
-          <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
         )}
       </div>
       <label className="relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#00a8cc]/20">
@@ -35,13 +36,13 @@ function SettingLink({ label, description, icon, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-3 w-full text-left py-2.5 px-3 rounded-lg hover:bg-slate-50 transition-colors"
+      className="flex items-center gap-3 w-full text-left py-2.5 px-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
     >
-      <span className="flex-shrink-0 text-slate-500">{icon}</span>
+      <span className="flex-shrink-0 text-slate-500 dark:text-slate-400">{icon}</span>
       <div className="flex-1">
-        <p className="text-sm font-medium text-slate-800">{label}</p>
+        <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{label}</p>
         {description && (
-          <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
         )}
       </div>
     </button>
@@ -49,11 +50,12 @@ function SettingLink({ label, description, icon, onClick }) {
 }
 
 export default function Settings() {
+  const { darkMode, toggleDarkMode } = useDarkMode();
+  
   // Local settings state
   const [settings, setSettings] = useState({
     notifications: true,
     emailAlerts: true,
-    darkMode: false,
     twoFactor: false,
     sessionTimeout: true,
   });
@@ -71,24 +73,24 @@ export default function Settings() {
   };
 
   return (
-    <div className="w-72 max-w-[28rem] sm:w-80">
+    <div className="w-72 max-w-[28rem] sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden">
       {/* Panel Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50/70 rounded-t-2xl">
-        <h2 className="text-base font-semibold text-slate-800">Settings</h2>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/80 rounded-t-2xl">
+        <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Settings</h2>
         <button
           type="button"
           onClick={handleLogout}
-          className="text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
+          className="text-xs font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-100 transition-colors"
         >
           Logout
         </button>
       </div>
 
       {/* Panel Body - scrollable if content overflows */}
-      <div className="max-h-96 overflow-y-auto py-2">
+      <div className="max-h-96 overflow-y-auto py-2 bg-white dark:bg-slate-900">
         {/* Account Section */}
         <div className="px-3 pb-1">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">
             Account
           </p>
           <SettingLink
@@ -133,8 +135,8 @@ export default function Settings() {
           <SettingToggle
             label="Dark Mode"
             description="Use dark theme"
-            enabled={settings.darkMode}
-            onChange={updateSetting('darkMode')}
+            enabled={darkMode}
+            onChange={toggleDarkMode}
           />
           <SettingToggle
             label="Two-Factor Auth"
@@ -179,8 +181,8 @@ export default function Settings() {
       </div>
 
       {/* Panel Footer */}
-      <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50/70 rounded-b-2xl">
-        <span className="text-xs text-slate-400">Clinical Precision v1.0</span>
+      <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/80 rounded-b-2xl">
+        <span className="text-xs text-slate-400 dark:text-slate-400">Clinical Precision v1.0</span>
         <button
           type="button"
           onClick={() => console.log('Save settings')}

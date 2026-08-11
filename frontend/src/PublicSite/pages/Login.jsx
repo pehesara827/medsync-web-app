@@ -121,10 +121,10 @@ export default function LoginPage() {
   const t = content[language];
 
   return (
-    <div className="min-h-screen bg-[#f3f8fb]">
+    <div className="min-h-screen bg-[#f3f8fb] text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="max-w-7xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
         <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-          <section className="w-full lg:w-1/2 rounded-[28px] bg-white/70 border border-slate-200 shadow-[0_24px_80px_rgba(15,23,42,0.08)] p-8 sm:p-10 backdrop-blur-sm">
+          <section className="w-full lg:w-1/2 rounded-[28px] bg-white/70 border border-slate-200 shadow-[0_24px_80px_rgba(15,23,42,0.08)] p-8 sm:p-10 backdrop-blur-sm dark:bg-slate-900/90 dark:border-slate-700">
             <div className="flex items-center justify-between mb-10">
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 rounded-2xl bg-[#00b8e6]/10 flex items-center justify-center text-[#00a8cc] shadow-sm">
@@ -133,11 +133,11 @@ export default function LoginPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm uppercase tracking-[0.35em] text-slate-400">{t.medicalPortal}</p>
-                  <p className="text-slate-600 text-sm">{t.securePatient}</p>
+                  <p className="text-sm uppercase tracking-[0.35em] text-slate-400 dark:text-slate-500">{t.medicalPortal}</p>
+                  <p className="text-slate-600 text-sm dark:text-slate-400">{t.securePatient}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-sm text-slate-500">
+              <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
                 <button
                   type="button"
                   onClick={toggleLanguage}
@@ -152,8 +152,8 @@ export default function LoginPage() {
             </div>
 
             <div className="mb-10">
-              <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">{t.welcomeBack}</h1>
-              <p className="mt-3 text-slate-600">{t.signIn}</p>
+              <h1 className="text-3xl font-semibold text-slate-900 dark:text-slate-100 sm:text-4xl">{t.welcomeBack}</h1>
+              <p className="mt-3 text-slate-600 dark:text-slate-400">{t.signIn}</p>
             </div>
 
             {error && (
@@ -169,7 +169,7 @@ export default function LoginPage() {
 
             <form className="space-y-5" onSubmit={handleSubmit}>
               <div>
-                <label htmlFor="login-identifier" className="mb-2 block text-sm font-semibold text-slate-700">
+                <label htmlFor="login-identifier" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">
                   {t.identifierLabel}
                 </label>
                 <input
@@ -181,13 +181,13 @@ export default function LoginPage() {
                     if (error) setError('');
                   }}
                   placeholder={t.identifierPlaceholder}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-[#00a8cc] focus:ring-2 focus:ring-[#00b8e6]/20"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-[#00a8cc] focus:ring-2 focus:ring-[#00b8e6]/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label htmlFor="password" className="text-sm font-semibold text-slate-700">
+                  <label htmlFor="password" className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                     {t.passwordLabel}
                   </label>
                   <button type="button" className="text-sm font-medium text-[#00a8cc] hover:text-[#007b8a]">
@@ -204,13 +204,13 @@ export default function LoginPage() {
                       if (error) setError('');
                     }}
                     placeholder={t.passwordPlaceholder}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-[#00a8cc] focus:ring-2 focus:ring-[#00b8e6]/20"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-[#00a8cc] focus:ring-2 focus:ring-[#00b8e6]/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
 
               <div className="flex items-center justify-between gap-4">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#00a8cc] focus:ring-[#00b8e6]" />
                   {t.rememberDevice}
                 </label>
@@ -235,15 +235,15 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <div className="mt-8 text-center text-sm text-slate-500">{t.quickLogin}</div>
+            <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">{t.quickLogin}</div>
             <button
               type="button"
-              className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00a8cc] hover:text-[#007b8a]"
+              className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00a8cc] hover:text-[#007b8a] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             >
               {t.mobileOtp}
             </button>
 
-            <p className="mt-8 text-center text-sm text-slate-500">
+            <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
               {t.newPatient}{' '}
               <Link to="/signup" className="font-semibold text-[#00a8cc] hover:text-[#007b8a]">
                 {t.register}

@@ -55,58 +55,35 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const navigate = useNavigate();
-  const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
 
   // Detect screen size changes
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth >= 768) {
-        setIsOpen(false); // Close sidebar on desktop
+      if (window.innerWidth >= 768 && onClose) {
+        onClose();
       }
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [onClose]);
 
   const handleLogout = () => {
     alert('Logging out...');
     navigate('/');
-    setIsOpen(false);
+    if (onClose) onClose();
   };
 
-  const closeSidebar = () => setIsOpen(false);
-  const toggleSidebar = () => setIsOpen(!isOpen);
+  const closeSidebar = () => {
+    if (onClose) onClose();
+  };
 
   return (
     <>
-      {/* Hamburger Menu Button - Mobile Only */}
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        aria-label="Toggle menu"
-        aria-expanded={isOpen}
-        className="fixed top-4 left-4 z-50 block md:hidden p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
-      >
-        <svg
-          className="w-6 h-6 text-slate-700"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          {isOpen ? (
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          ) : (
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          )}
-        </svg>
-      </button>
-
       {/* Backdrop Overlay - Mobile Only */}
       {isOpen && (
         <button
@@ -120,7 +97,7 @@ export default function Sidebar() {
       {/* Sidebar Navigation */}
       <aside 
         aria-label="Sidebar Navigation"
-        className="fixed inset-y-0 left-0 md:static z-50 md:z-auto w-72 bg-[#f8fcfd] border-r border-slate-200/60 flex flex-col justify-between h-screen md:h-auto p-5 select-none flex-shrink-0 transform md:transform-none transition-transform duration-300 ease-in-out"
+        className="fixed inset-y-0 left-0 md:static z-50 md:z-auto w-72 bg-[#f8fcfd] dark:bg-slate-800 border-r border-slate-200/60 dark:border-slate-700/60 flex flex-col justify-between h-screen md:h-auto p-5 select-none flex-shrink-0 transform md:transform-none transition-transform duration-300 ease-in-out"
         style={
           isMobile
             ? { transform: isOpen ? 'translateX(0)' : 'translateX(-100%)' }
@@ -138,10 +115,10 @@ export default function Sidebar() {
               </svg>
             </div>
             <div className="flex flex-col">
-              <span className="text-[#00b0d8] font-bold text-lg leading-snug tracking-tight">
+              <span className="text-[#00b0d8] dark:text-[#00b0d8] font-bold text-lg leading-snug tracking-tight">
                 Medical Portal
               </span>
-              <span className="text-slate-500 text-xs font-medium">
+              <span className="text-slate-500 dark:text-slate-400 text-xs font-medium">
                 Clinical Precision v1.0
               </span>
             </div>
@@ -159,8 +136,8 @@ export default function Sidebar() {
                     className={({ isActive }) =>
                       `relative flex items-center gap-4 px-4 py-3 rounded-xl text-sm transition-colors duration-150 ${
                         isActive
-                          ? 'bg-[#e0f5f8] text-[#00b0d8] font-semibold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                          ? 'bg-[#e0f5f8] dark:bg-slate-700 text-[#00b0d8] dark:text-slate-100 font-semibold'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-700/70 font-medium'
                       }`
                     }
                   >
@@ -192,12 +169,12 @@ export default function Sidebar() {
             className={({ isActive }) =>
               `group flex items-center gap-4 px-4 py-3 rounded-xl text-sm transition-colors duration-150 ${
                 isActive
-                  ? 'bg-[#e0f5f8] text-[#00b0d8] font-semibold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                  ? 'bg-[#e0f5f8] dark:bg-slate-700 text-[#00b0d8] dark:text-slate-100 font-semibold'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-700/70 font-medium'
               }`
             }
           >
-            <svg className="w-5 h-5 flex-shrink-0 text-slate-700 group-hover:text-slate-900" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 flex-shrink-0 text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span>Help Center</span>

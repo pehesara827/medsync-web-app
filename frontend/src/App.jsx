@@ -7,6 +7,9 @@ import { PatientLayout } from './layouts/PatientLayout';
 import { DoctorLayout } from './layouts/DoctorLayout';
 import { AdminLayout } from './layouts/AdminLayout';
 
+// Import Dark Mode Provider
+import { DarkModeProvider } from './context/DarkModeContext';
+
 // Import Route Guard
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -36,8 +39,9 @@ function NotFound() {
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
+    <DarkModeProvider>
+      <Router>
+        <Routes>
 
         {/* 1. PUBLIC ROUTES (Main Navbar) */}
         <Route path="/" element={<PublicLayout />}>
@@ -80,5 +84,6 @@ export default function App() {
 
       </Routes>
     </Router>
+    </DarkModeProvider>
   );
 }

@@ -74,7 +74,10 @@ export default function QRCodePage() {
             doctor_profiles (
               first_name,
               last_name,
-              specialization
+              specialization,
+              specialties (
+                name
+              )
             ),
             doctor_schedules (
               start_time,
@@ -172,7 +175,8 @@ export default function QRCodePage() {
       appt.doctor_profiles?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appt.doctor_profiles?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appt.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      appt.specialization?.toLowerCase().includes(searchTerm.toLowerCase());
+      appt.doctor_profiles?.specialties?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appt.doctor_profiles?.specialization?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesFilter = 
       filterStatus === 'all' || 
@@ -319,7 +323,7 @@ export default function QRCodePage() {
                         <p className="text-sm font-semibold text-slate-800 truncate">
                           Dr. {doctor.first_name} {doctor.last_name}
                         </p>
-                        <p className="text-xs text-slate-600">{doctor.specialization}</p>
+                        <p className="text-xs text-slate-600">{doctor.specialties?.name || doctor.specialization}</p>
                       </div>
                     </div>
 

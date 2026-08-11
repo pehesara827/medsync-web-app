@@ -3,7 +3,13 @@ import { X, User, Calendar, CreditCard, ChevronDown, Loader2, AlertCircle, Check
 import { supabase } from '../../../supabaseClient';
 import AppointmentConfirmationPass from './AppointmentConfirmationPass';
 
-export default function BookAppointmentModal({ isOpen, onClose }) {
+export default function BookAppointmentModal({
+  isOpen,
+  onClose,
+  initialSpecialization = '',
+  initialDoctorId = '',
+  initialDate = '',
+}) {
   // ── Form state ─────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(1);
   const [bookingType, setBookingType] = useState('self');
@@ -17,7 +23,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
   });
   const [specialization, setSpecialization] = useState('');
   const [doctor, setDoctor] = useState('');
-  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentDate, setAppointmentDate] = useState(initialDate);
   const [timeSlot, setTimeSlot] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('online');
 
@@ -112,15 +118,26 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
       setError('');
       try {
         const { data, error: specError } = await supabase
-          .from('doctor_profiles')
-          .select('specialization')
-          .eq('is_approved', true);
+          .from('specialties')
+          .select('id, name')
+          .order('name');
 
         if (specError) throw specError;
 
-        // Extract unique specializations
-        const unique = [...new Set((data || []).map((d) => d.specialization).filter(Boolean))].sort();
-        setSpecializations(unique);
+        const specs = data || [];
+        setSpecializations(specs);
+
+        // Auto-select the specialization matching the doctor card
+        if (initialSpecialization) {
+          const matched = specs.find(
+            (spec) => spec.name.toLowerCase() === initialSpecialization.toLowerCase()
+          );
+          if (matched) {
+            setSpecialization(matched.id);
+            setDoctor('');
+            setTimeSlot('');
+          }
+        }
       } catch (err) {
         setError(`Failed to load specializations: ${err.message}`);
       } finally {
@@ -129,7 +146,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
     };
 
     loadSpecializations();
-  }, [isOpen]);
+  }, [isOpen, initialSpecialization]);
 
   // ── Fetch doctors when specialization changes ──────────────────────
   useEffect(() => {
@@ -142,13 +159,20 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
       try {
         const { data, error: docError } = await supabase
           .from('doctor_profiles')
-          .select('id, first_name, last_name, specialization')
-          .eq('specialization', specialization)
+          .select('id, first_name, last_name, specialization, specialties (id, name)')
+          .eq('specialty_id', specialization)
           .eq('is_approved', true)
           .order('first_name');
 
         if (docError) throw docError;
-        setDoctors(data || []);
+
+        const docs = data || [];
+        setDoctors(docs);
+
+        // Auto-select the doctor matching the doctor card
+        if (initialDoctorId && docs.some((doc) => doc.id === initialDoctorId)) {
+          setDoctor(initialDoctorId);
+        }
       } catch (err) {
         setError(`Failed to load doctors: ${err.message}`);
       } finally {
@@ -157,7 +181,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
     };
 
     loadDoctors();
-  }, [specialization]);
+  }, [specialization, initialDoctorId]);
 
   // ── Fetch available time slots when doctor + date change ───────────
   useEffect(() => {
@@ -460,13 +484,13 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
       ></div>
 
       {/* Modal Content */}
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-slate-100 transition"
+          className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition"
         >
-          <X size={20} className="text-slate-600" />
+          <X size={20} className="text-slate-600 dark:text-slate-200" />
         </button>
 
         {/* ── Confirmation Pass View (after successful booking) ─────── */}
@@ -481,11 +505,11 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
         <div className="p-6 md:p-8">
           {/* Header */}
           <div className="mb-6">
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-800">
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100">
               {currentStep === 1 ? 'Book New Appointment' : isBankTransfer ? 'Upload Payment Slip' : 'Confirm Payment'}
             </h2>
             {currentStep === 2 && (
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-sm text-slate-500 dark:text-slate-300 mt-1">
                 {isBankTransfer
                   ? 'Please upload your bank transfer receipt to complete the booking.'
                   : 'Review your appointment details and confirm the payment.'}
@@ -504,10 +528,10 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                 </div>
                 <span className="text-xs font-semibold">Booking Details</span>
               </div>
-              <div className={`flex-1 h-0.5 rounded ${currentStep > 1 ? 'bg-emerald-400' : 'bg-slate-200'}`}></div>
-              <div className={`flex items-center gap-2 ${currentStep === 2 ? 'text-[#00b8e6]' : 'text-slate-400'}`}>
+              <div className={`flex-1 h-0.5 rounded ${currentStep > 1 ? 'bg-emerald-400' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
+              <div className={`flex items-center gap-2 ${currentStep === 2 ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`}>
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                  currentStep === 2 ? 'bg-[#00b8e6] text-white' : 'bg-slate-200 text-slate-500'
+                  currentStep === 2 ? 'bg-[#00b8e6] text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300'
                 }`}>
                   2
                 </div>
@@ -518,7 +542,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
 
           {/* Error banner */}
           {error && (
-            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700 flex items-start gap-3">
+            <div className="mb-6 rounded-2xl border border-red-200 dark:border-red-600 bg-red-50 dark:bg-red-950 px-5 py-4 text-sm text-red-700 dark:text-red-200 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
               <span>{error}</span>
             </div>
@@ -526,7 +550,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
 
           {/* Success banner */}
           {success && (
-            <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-700 flex items-start gap-3">
+            <div className="mb-6 rounded-2xl border border-emerald-200 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-5 py-4 text-sm text-emerald-700 dark:text-emerald-200 flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-500" />
               <span>{success}</span>
             </div>
@@ -540,7 +564,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
               <>
                 {/* Booking Type */}
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-3">Booking Type</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-100 mb-3">Booking Type</label>
                   <div className="flex gap-3">
                     <button
                       type="button"
@@ -548,7 +572,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                       className={`flex-1 py-3 px-4 rounded-xl font-semibold text-sm transition ${
                         bookingType === 'self'
                           ? 'bg-[#00b8e6] text-white shadow-md'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
                       }`}
                     >
                       Self
@@ -559,7 +583,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                       className={`flex-1 py-3 px-4 rounded-xl font-semibold text-sm transition ${
                         bookingType === 'beneficiary'
                           ? 'bg-[#00b8e6] text-white shadow-md'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
                       }`}
                     >
                       Beneficiary
@@ -576,7 +600,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                         value={selectedBeneficiary}
                         onChange={(e) => handleBeneficiaryChange(e.target.value)}
                         disabled={loadingBeneficiaries}
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6] appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6] appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">{loadingBeneficiaries ? 'Loading beneficiaries...' : 'Select beneficiary'}</option>
                         {beneficiaries.map((ben) => (
@@ -591,39 +615,39 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
 
                     {/* New Beneficiary Form */}
                     {showNewBeneficiaryForm && (
-                      <div className="mt-4 p-4 bg-slate-50 rounded-xl space-y-3">
-                        <h4 className="text-sm font-semibold text-slate-700 mb-3">New Beneficiary Details</h4>
+                      <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-3">
+                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-100 mb-3">New Beneficiary Details</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Full Name</label>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Full Name</label>
                             <input
                               type="text"
                               required
                               value={newBeneficiary.fullName}
                               onChange={(e) => setNewBeneficiary({...newBeneficiary, fullName: e.target.value})}
-                              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
+                              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
                               placeholder="Enter full name"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Age</label>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Age</label>
                             <input
                               type="number"
                               required
                               min="0"
                               value={newBeneficiary.age}
                               onChange={(e) => setNewBeneficiary({...newBeneficiary, age: e.target.value})}
-                              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
+                              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
                               placeholder="Enter age"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Gender</label>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Gender</label>
                             <select
                               required
                               value={newBeneficiary.gender}
                               onChange={(e) => setNewBeneficiary({...newBeneficiary, gender: e.target.value})}
-                              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
+                              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
                             >
                               <option value="">Select gender</option>
                               <option value="male">Male</option>
@@ -632,13 +656,13 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Relationship</label>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Relationship</label>
                             <input
                               type="text"
                               required
                               value={newBeneficiary.relationship}
                               onChange={(e) => setNewBeneficiary({...newBeneficiary, relationship: e.target.value})}
-                              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
+                              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
                               placeholder="e.g., Son, Spouse, Father"
                             />
                           </div>
@@ -650,10 +674,10 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
 
                 {/* Provider Selection */}
                 <div className="space-y-4">
-                  <label className="block text-sm font-semibold text-slate-700">Provider Selection</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-100">Provider Selection</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-2">Specialization</label>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Specialization</label>
                       <div className="relative">
                         <select
                           value={specialization}
@@ -663,18 +687,18 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                             setTimeSlot('');
                           }}
                           disabled={loadingSpecializations}
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6] appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6] appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="">{loadingSpecializations ? 'Loading specializations...' : 'Select specialization'}</option>
                           {specializations.map((spec) => (
-                            <option key={spec} value={spec}>{spec}</option>
+                            <option key={spec.id} value={spec.id}>{spec.name}</option>
                           ))}
                         </select>
                         <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-2">Doctor</label>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Doctor</label>
                       <div className="relative">
                         <select
                           value={doctor}
@@ -683,7 +707,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                             setTimeSlot('');
                           }}
                           disabled={!specialization || loadingDoctors}
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6] appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6] appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="">
                             {!specialization
@@ -709,7 +733,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                   <label className="block text-sm font-semibold text-slate-700">Schedule Selection</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-2">Appointment Date</label>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Appointment Date</label>
                       <div className="relative">
                         <input
                           type="date"
@@ -720,20 +744,20 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                             setAppointmentDate(e.target.value);
                             setTimeSlot('');
                           }}
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b8e6]/30 focus:border-[#00b8e6]"
                         />
                         <Calendar size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-2">Available Time Slots</label>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Available Time Slots</label>
                       {loadingSlots ? (
-                        <div className="flex items-center justify-center py-4 text-slate-400">
+                        <div className="flex items-center justify-center py-4 text-slate-400 dark:text-slate-300">
                           <Loader2 className="w-5 h-5 animate-spin mr-2" />
                           <span className="text-xs">Loading slots...</span>
                         </div>
                       ) : timeSlots.length === 0 ? (
-                        <div className="py-4 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-slate-100">
+                        <div className="py-4 text-center text-xs text-slate-400 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
                           {doctor && appointmentDate
                             ? 'No available slots for this date'
                             : 'Select a doctor and date to see slots'}
@@ -748,7 +772,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                               className={`py-2 px-3 rounded-lg text-xs font-semibold transition ${
                                 timeSlot === slot.id
                                   ? 'bg-[#00b8e6] text-white shadow-sm'
-                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
                               }`}
                             >
                               {formatTime(slot.start_time)}
@@ -762,7 +786,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
 
                 {/* Payment Details */}
                 <div className="space-y-4">
-                  <label className="block text-sm font-semibold text-slate-700">Payment Details</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-100">Payment Details</label>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <button
                       type="button"
@@ -770,12 +794,12 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                       className={`p-4 rounded-xl border-2 transition ${
                         paymentMethod === 'online'
                           ? 'border-[#00b8e6] bg-[#00b8e6]/5'
-                          : 'border-slate-200 hover:border-slate-300'
+                          : 'border-slate-200 dark:border-slate-700 dark:hover:border-slate-600'
                       }`}
                     >
-                      <CreditCard size={24} className={`mx-auto mb-2 ${paymentMethod === 'online' ? 'text-[#00b8e6]' : 'text-slate-400'}`} />
-                      <p className="text-xs font-semibold text-slate-700">Online Gateway</p>
-                      <p className="text-[10px] text-slate-500 mt-1">Credit/Debit Cards</p>
+                      <CreditCard size={24} className={`mx-auto mb-2 ${paymentMethod === 'online' ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`} />
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Online Gateway</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Credit/Debit Cards</p>
                     </button>
                     <button
                       type="button"
@@ -783,12 +807,12 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                       className={`p-4 rounded-xl border-2 transition ${
                         paymentMethod === 'reception'
                           ? 'border-[#00b8e6] bg-[#00b8e6]/5'
-                          : 'border-slate-200 hover:border-slate-300'
+                          : 'border-slate-200 dark:border-slate-700 dark:hover:border-slate-600'
                       }`}
                     >
-                      <CreditCard size={24} className={`mx-auto mb-2 ${paymentMethod === 'reception' ? 'text-[#00b8e6]' : 'text-slate-400'}`} />
-                      <p className="text-xs font-semibold text-slate-700">Pay at Reception</p>
-                      <p className="text-[10px] text-slate-500 mt-1">Cash or Card on arrival</p>
+                      <CreditCard size={24} className={`mx-auto mb-2 ${paymentMethod === 'reception' ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`} />
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Pay at Reception</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Cash or Card on arrival</p>
                     </button>
                     <button
                       type="button"
@@ -796,12 +820,12 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                       className={`p-4 rounded-xl border-2 transition ${
                         paymentMethod === 'bank'
                           ? 'border-[#00b8e6] bg-[#00b8e6]/5'
-                          : 'border-slate-200 hover:border-slate-300'
+                          : 'border-slate-200 dark:border-slate-700 dark:hover:border-slate-600'
                       }`}
                     >
-                      <Landmark size={24} className={`mx-auto mb-2 ${paymentMethod === 'bank' ? 'text-[#00b8e6]' : 'text-slate-400'}`} />
-                      <p className="text-xs font-semibold text-slate-700">Bank Transfer</p>
-                      <p className="text-[10px] text-slate-500 mt-1">Requires slip upload</p>
+                      <Landmark size={24} className={`mx-auto mb-2 ${paymentMethod === 'bank' ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`} />
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Bank Transfer</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Requires slip upload</p>
                     </button>
                   </div>
                 </div>
@@ -814,40 +838,42 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
             {currentStep === 2 && (
               <>
                 {/* Booking Summary */}
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 space-y-3">
-                  <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-5 space-y-3">
+                  <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                     <User size={16} className="text-[#00b8e6]" />
                     Appointment Summary
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-xs text-slate-500">Doctor</p>
-                      <p className="font-semibold text-slate-700">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Doctor</p>
+                      <p className="font-semibold text-slate-700 dark:text-slate-100">
                         {selectedDoctor ? `Dr. ${selectedDoctor.first_name} ${selectedDoctor.last_name}` : '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Specialization</p>
-                      <p className="font-semibold text-slate-700">{specialization || '—'}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Specialization</p>
+                      <p className="font-semibold text-slate-700 dark:text-slate-100">
+                        {specializations.find((s) => s.id === specialization)?.name || '—'}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Date</p>
-                      <p className="font-semibold text-slate-700">{appointmentDate || '—'}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Date</p>
+                      <p className="font-semibold text-slate-700 dark:text-slate-100">{appointmentDate || '—'}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Time</p>
-                      <p className="font-semibold text-slate-700">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Time</p>
+                      <p className="font-semibold text-slate-700 dark:text-slate-100">
                         {selectedSchedule ? formatTime(selectedSchedule.start_time) : '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Booking Type</p>
-                      <p className="font-semibold text-slate-700">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Booking Type</p>
+                      <p className="font-semibold text-slate-700 dark:text-slate-100">
                         {bookingType === 'self' ? 'Self' : 'Beneficiary'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Consultation Fee</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Consultation Fee</p>
                       <p className="font-semibold text-[#00b8e6]">
                         {selectedSchedule ? `Rs. ${Number(selectedSchedule.consultation_fee).toLocaleString()}` : '—'}
                       </p>
@@ -859,25 +885,25 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                 {isBankTransfer && (
                   <div className="space-y-4">
                     <div className="rounded-2xl border border-[#00b8e6]/20 bg-[#00b8e6]/5 p-5">
-                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-3">
                         <Building2 size={16} className="text-[#00b8e6]" />
                         Bank Transfer Details
                       </h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-slate-500">Bank</span>
-                          <span className="font-semibold text-slate-700">Pehesara Medical Bank</span>
+                          <span className="text-slate-500 dark:text-slate-400">Bank</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-100">Pehesara Medical Bank</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-500">Account Name</span>
-                          <span className="font-semibold text-slate-700">MedSync Health Services</span>
+                          <span className="text-slate-500 dark:text-slate-400">Account Name</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-100">MedSync Health Services</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-500">Account Number</span>
-                          <span className="font-semibold text-slate-700">1234-5678-9012</span>
+                          <span className="text-slate-500 dark:text-slate-400">Account Number</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-100">1234-5678-9012</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-500">Amount</span>
+                          <span className="text-slate-500 dark:text-slate-400">Amount</span>
                           <span className="font-semibold text-[#00b8e6]">
                             {selectedSchedule ? `Rs. ${Number(selectedSchedule.consultation_fee).toLocaleString()}` : '—'}
                           </span>
@@ -887,7 +913,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
 
                     {/* Slip Upload Area */}
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-3">
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-100 mb-3">
                         Upload Payment Slip <span className="text-red-500">*</span>
                       </label>
 
@@ -895,16 +921,16 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="w-full border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-[#00b8e6] hover:bg-[#00b8e6]/5 transition group"
+                          className="w-full border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-8 text-center hover:border-[#00b8e6] hover:bg-[#00b8e6]/5 dark:hover:bg-slate-800 transition group"
                         >
                           <Upload size={32} className="mx-auto mb-3 text-slate-400 group-hover:text-[#00b8e6] transition" />
-                          <p className="text-sm font-semibold text-slate-600 group-hover:text-[#00b8e6] transition">
+                          <p className="text-sm font-semibold text-slate-600 dark:text-slate-200 group-hover:text-[#00b8e6] transition">
                             Click to upload your payment slip
                           </p>
-                          <p className="text-xs text-slate-400 mt-1">JPG, PNG, WEBP, or PDF (max 5MB)</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-400 mt-1">JPG, PNG, WEBP, or PDF (max 5MB)</p>
                         </button>
                       ) : (
-                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                        <div className="rounded-2xl border border-emerald-200 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-950 p-4">
                           <div className="flex items-center gap-4">
                             {slipPreview ? (
                               <img
@@ -918,8 +944,8 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-slate-700 truncate">{slipFile.name}</p>
-                              <p className="text-xs text-slate-500 mt-0.5">
+                              <p className="text-sm font-semibold text-slate-700 dark:text-slate-100 truncate">{slipFile.name}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                 {(slipFile.size / 1024).toFixed(1)} KB
                               </p>
                               <p className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">
@@ -966,13 +992,13 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
 
                 {/* Online Gateway: Payment Confirmation */}
                 {isOnlineGateway && (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                    <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-4">
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-5">
+                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
                       <CreditCard size={16} className="text-[#00b8e6]" />
                       Online Payment
                     </h4>
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200">
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-[#00b8e6]/10 flex items-center justify-center">
                             <CreditCard size={20} className="text-[#00b8e6]" />
@@ -997,7 +1023,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
             )}
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
               {currentStep === 2 && showNextButton ? (
                 <button
                   type="button"
@@ -1013,7 +1039,7 @@ export default function BookAppointmentModal({ isOpen, onClose }) {
                   type="button"
                   onClick={onClose}
                   disabled={submitting}
-                  className="px-6 py-3 rounded-xl text-slate-700 font-semibold text-sm hover:bg-slate-100 transition disabled:opacity-50"
+                  className="px-6 py-3 rounded-xl text-slate-700 dark:text-slate-200 font-semibold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50"
                 >
                   Cancel
                 </button>

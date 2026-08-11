@@ -7,6 +7,30 @@ import {
 } from '../utils/qrUtils.js';
 
 /**
+ * Formats a DATE column (YYYY-MM-DD) into a friendly day label.
+ * @param {string} dateStr - e.g. '2026-08-09'
+ * @returns {string} e.g. 'Today', 'Tomorrow', or 'Aug 9'
+ */
+const formatDay = (dateStr) => {
+  if (!dateStr) return '—';
+  const date = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateStr;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  if (date.getTime() === today.getTime()) return 'Today';
+  if (date.getTime() === tomorrow.getTime()) return 'Tomorrow';
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+/**
  * Maps a payment method from frontend to database enum
  */
 const mapPaymentMethod = (method) => {
@@ -70,6 +94,7 @@ export const createAppointment = async (req, res, next) => {
     const schedule = appointment.doctor_schedules || {};
     const payment = appointment.payments || {};
     const beneficiary = appointment.beneficiaries || null;
+    const specialtyName = doctor.specialties?.name || doctor.specialization || '—';
 
     // Determine patient name
     let patientName = '';
@@ -93,7 +118,7 @@ export const createAppointment = async (req, res, next) => {
         verificationCode,
         patientName: patientName || '—',
         doctorName: `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim() || '—',
-        specialization: doctor.specialization || '—',
+        specialization: specialtyName,
         appointmentDate: appointment.appointment_date || '',
         timeSlot: formatTime(schedule.start_time),
         paymentStatus: mapPaymentStatus(payment.payment_status),
@@ -123,7 +148,7 @@ export const getAppointmentPass = async (req, res, next) => {
     }
 
     // 1. Fetch appointment with all related data
-    const appointment = await appointmentModel.findById(appointmentId);
+    const appointment = await appointmentModel.getAppointmentById(appointmentId);
 
     // 2. Build the secure QR payload
     const verificationCode = generateVerificationCode(appointment.id);
@@ -157,6 +182,7 @@ export const getAppointmentPass = async (req, res, next) => {
     const doctor = appointment.doctor_profiles || {};
     const schedule = appointment.doctor_schedules || {};
     const payment = appointment.payments || {};
+    const specialtyName = doctor.specialties?.name || doctor.specialization || '—';
 
     res.json({
       appointment: {
@@ -164,7 +190,7 @@ export const getAppointmentPass = async (req, res, next) => {
         verificationCode,
         patientName: patientName || '—',
         doctorName: `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim() || '—',
-        specialization: doctor.specialization || '—',
+        specialization: specialtyName,
         appointmentDate: appointment.appointment_date || '',
         timeSlot: formatTime(schedule.start_time),
         paymentStatus: mapPaymentStatus(payment.payment_status),
@@ -176,6 +202,81 @@ export const getAppointmentPass = async (req, res, next) => {
     if (error.code === 'PGRST116') {
       return res.status(404).json({ message: 'Appointment not found.' });
     }
+    next(error);
+  }
+};
+
+/**
+ * GET /api/appointments/patient/:patientId
+ * Returns all appointments for a patient, formatted for the AppointmentCard.
+ */
+export const getPatientAppointments = async (req, res, next) => {
+  try {
+    const { patientId } = req.params;
+
+    if (!patientId) {
+      return res.status(400).json({ message: 'Patient ID is required.' });
+    }
+
+    // Fetch all appointments for the patient
+    const appointments = await appointmentModel.getAppointmentsByPatient(patientId);
+
+    // Map each appointment into the card shape
+    const cards = await Promise.all(
+      appointments.map(async (appt) => {
+        const doctor = appt.doctor_profiles || {};
+        const schedule = appt.doctor_schedules || {};
+        const specialtyName = doctor.specialties?.name || doctor.specialization || '—';
+
+        // Compute patients ahead for active (PENDING/CONFIRMED) appointments
+        let patientsAhead = null;
+        if (appt.status === 'PENDING' || appt.status === 'CONFIRMED') {
+          try {
+            patientsAhead = await appointmentModel.getPatientsAhead(
+              appt.id,
+              appt.doctor_id,
+              appt.appointment_date,
+              appt.created_at
+            );
+          } catch (err) {
+            console.error(`Failed to compute patients ahead for ${appt.id}:`, err);
+            patientsAhead = null;
+          }
+        }
+
+        // Compute badge status based on date and status
+        let badgeStatus = appt.status;
+        if (appt.status === 'PENDING' || appt.status === 'CONFIRMED') {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const apptDate = new Date(`${appt.appointment_date}T00:00:00`);
+          if (apptDate.getTime() === today.getTime()) {
+            badgeStatus = 'Upcoming';
+          } else if (apptDate.getTime() > today.getTime()) {
+            badgeStatus = 'Scheduled';
+          }
+        }
+
+        return {
+          id: appt.id,
+          status: appt.status,
+          badgeStatus,
+          day: formatDay(appt.appointment_date),
+          time: formatTime(schedule.start_time),
+          doctorName: `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim() || '—',
+          specialty: specialtyName,
+          patientsAhead,
+          doctorImage: doctor.doctor_image || null,
+          hasBadge: appt.status === 'PENDING' || appt.status === 'CONFIRMED',
+          createdAt: appt.created_at,
+          updatedAt: appt.updated_at,
+        };
+      })
+    );
+
+    res.json({ appointments: cards });
+  } catch (error) {
+    console.error('Error fetching patient appointments:', error);
     next(error);
   }
 };

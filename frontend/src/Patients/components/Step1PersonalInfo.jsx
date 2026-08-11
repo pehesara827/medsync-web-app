@@ -1,7 +1,7 @@
 export default function Step1PersonalInfo({ formData, handleChange, nextStep }) {
   return (
     <div className="space-y-8">
-      <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col items-center gap-4">
           <div className="flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed border-cyan-300 bg-slate-50 text-cyan-600">
             <span className="text-4xl font-bold">+</span>
@@ -20,24 +20,24 @@ export default function Step1PersonalInfo({ formData, handleChange, nextStep }) 
 
         <div className="mt-10 grid gap-4 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-slate-700">First Name</span>
+            <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">First Name</span>
             <input
               name="first_name"
               value={formData.first_name || ''}
               onChange={handleChange}
               placeholder="e.g. Jane"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
 
           <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-slate-700">Last Name</span>
+            <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Last Name</span>
             <input
               name="last_name"
               value={formData.last_name || ''}
               onChange={handleChange}
               placeholder="e.g. Doe"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
 

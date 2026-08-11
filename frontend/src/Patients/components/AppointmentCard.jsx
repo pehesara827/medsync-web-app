@@ -7,14 +7,14 @@ export default function AppointmentCard({ appointment}) {
   };
 
   return (
-    <div className="relative overflow-hidden w-full bg-white rounded-2xl md:rounded-3xl p-4 md:p-7 border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] select-none">
+    <div className="relative overflow-hidden w-full bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl p-4 md:p-7 border border-slate-200 dark:border-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] select-none">
       
       {/* Top-Right Light Cyan Curved Badge - Responsive */}
-      <div className="absolute top-0 right-0 w-32 md:w-44 h-20 md:h-28 bg-[#e6f7fa] rounded-bl-[50px] md:rounded-bl-[100px] pointer-events-none flex flex-col items-end pt-3 md:pt-5 pr-4 md:pr-7">
-        <span className="text-lg md:text-2xl font-bold text-slate-800 tracking-tight leading-none">
+      <div className="absolute top-0 right-0 w-32 md:w-44 h-20 md:h-28 bg-slate-100 dark:bg-slate-800/80 rounded-bl-[50px] md:rounded-bl-[100px] pointer-events-none flex flex-col items-end pt-3 md:pt-5 pr-4 md:pr-7">
+        <span className="text-lg md:text-2xl font-bold text-slate-800 dark:text-cyan-300 tracking-tight leading-none">
           {appointment.day}
         </span>
-        <span className="text-xs text-slate-500 font-normal mt-1 md:mt-1.5">
+        <span className="text-xs text-slate-500 dark:text-cyan-300 font-normal mt-1 md:mt-1.5">
           {appointment.time}
         </span>
       </div>
@@ -22,14 +22,14 @@ export default function AppointmentCard({ appointment}) {
       {/* Main Content Body */}
       <div className="flex flex-col gap-1 pr-20 md:pr-36">
         
-        {/* Status Pill Tag */}
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#dcf5fa] text-[#00b0d8] text-xs font-semibold w-fit">
+        {/* Status Pill Tag - uses badgeStatus for PENDING/CONFIRMED, raw status for others */}
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#dcf5fa] text-[#00b0d8] dark:bg-cyan-500/20 dark:text-cyan-300 text-xs font-semibold w-fit">
           <span className="w-1.5 h-1.5 rounded-full bg-[#00b0d8]"></span>
-          <span>{appointment.status}</span>
+          <span>{appointment.badgeStatus || appointment.status}</span>
         </div>
 
         {/* Doctor Name & Specialty */}
-        <h2 className="text-xl md:text-3xl font-extrabold text-slate-900 tracking-tight mt-2 md:mt-2.5">
+        <h2 className="text-xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight mt-2 md:mt-2.5">
           {appointment.doctorName}
         </h2>
         <p className="text-[#00b0d8] text-xs md:text-sm font-medium">
@@ -38,7 +38,7 @@ export default function AppointmentCard({ appointment}) {
       </div>
 
       {/* Horizontal Divider Line */}
-      <div className="w-full h-[1px] bg-slate-100 my-4 md:my-6" />
+      <div className="w-full h-[1px] bg-slate-100 dark:bg-slate-800 my-4 md:my-6" />
 
       {/* Card Footer: Doctor Info & Actions - Responsive Layout */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-0">
@@ -47,25 +47,23 @@ export default function AppointmentCard({ appointment}) {
         <div className="flex items-start md:items-center gap-3 md:gap-4 w-full md:w-auto">
           
           {/* Doctor Image */}
-          <div className="w-12 md:w-14 h-12 md:h-14 rounded-lg md:rounded-xl overflow-hidden flex-shrink-0 border border-slate-100 shadow-sm">
-            <img
-              src={appointment.doctorImage}
-              alt={appointment.doctorName}
-              className="w-full h-full object-cover"
-            />
+          <div className="w-12 md:w-14 h-12 md:h-14 rounded-lg md:rounded-xl overflow-hidden flex-shrink-0 border border-slate-200 dark:border-slate-800 shadow-sm bg-slate-50 dark:bg-slate-900/80 flex items-center justify-center">
+            {appointment.doctorImage ? (
+              <img
+                src={appointment.doctorImage}
+                alt={appointment.doctorName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <svg className="w-6 md:w-7 h-6 md:h-7 text-[#00b0d8] dark:text-cyan-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            )}
           </div>
 
           {/* Consultation Details */}
           <div className="flex flex-col gap-0.5 md:gap-1 min-w-0">
             
-            {/* Consultation Type with Video Icon */}
-            <div className="flex items-center gap-2 text-slate-700 text-xs md:text-sm font-normal">
-              <svg className="w-3 md:w-4 h-3 md:h-4 text-slate-700 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              <span className="truncate">{appointment.consultationType}</span>
-            </div>
-
             {/* Sub-info: ID & Patients Ahead - Wraps on mobile */}
             <div className="flex items-center gap-2 md:gap-3.5 text-xs font-semibold flex-wrap">
               

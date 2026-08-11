@@ -60,7 +60,11 @@ export default function PatientsAppointments() {
             doctor_profiles (
               first_name,
               last_name,
-              specialization
+              specialization,
+              doctor_image,
+              specialties (
+                name
+              )
             ),
             doctor_schedules (
               start_time,
@@ -125,14 +129,29 @@ export default function PatientsAppointments() {
           : beneficiary.full_name;
       }
 
+      // Compute badge status based on date and status
+      let badgeStatus = appt.status;
+      if (appt.status === 'PENDING' || appt.status === 'CONFIRMED') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const apptDate = new Date(`${appt.appointment_date}T00:00:00`);
+        if (apptDate.getTime() === today.getTime()) {
+          badgeStatus = 'Upcoming';
+        } else if (apptDate.getTime() > today.getTime()) {
+          badgeStatus = 'Scheduled';
+        }
+      }
+
       return {
         id: appt.id,
         patientName,
         doctorName: `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim(),
-        specialization: doctor.specialization || '—',
+        specialization: doctor.specialties?.name || doctor.specialization || '—',
+        doctorImage: doctor.doctor_image || null,
         appointmentDate: formatDate(appt.appointment_date),
         timeSlot: formatTime(schedule.start_time),
         status: appt.status,
+        badgeStatus,
         paymentStatus: payment.payment_status || 'UNPAID',
       };
     });
@@ -140,22 +159,24 @@ export default function PatientsAppointments() {
 
   // Filter appointments based on the active filter tab
   const filteredAppointments = useMemo(() => {
+    // Helper: resolve the display status (badgeStatus takes priority, falls back to status)
+    const getDisplayStatus = (appt) => appt.badgeStatus || appt.status;
     if (activeFilter === 'All') return transformedAppointments;
-    if (activeFilter === 'Upcoming') {
-      // 'Upcoming' includes both 'Upcoming' and 'Scheduled' statuses
+    if (activeFilter === 'Scheduled') {
+      // 'Scheduled' includes both 'Upcoming' and 'Scheduled' statuses
       return transformedAppointments.filter(
-        (appt) => appt.status === 'Upcoming' || appt.status === 'Scheduled' || appt.status === 'PENDING'
+        (appt) => getDisplayStatus(appt) === 'Upcoming' || getDisplayStatus(appt) === 'Scheduled'
       );
     }
-    return transformedAppointments.filter((appt) => appt.status === activeFilter);
+    return transformedAppointments.filter((appt) => getDisplayStatus(appt) === activeFilter);
   }, [activeFilter, transformedAppointments]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-slate-900">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-[#00b8e6] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading appointments...</p>
+          <p className="text-slate-600 dark:text-slate-200">Loading appointments...</p>
         </div>
       </div>
     );
@@ -163,9 +184,9 @@ export default function PatientsAppointments() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center p-8 bg-red-50 rounded-2xl border border-red-200 max-w-md">
-          <p className="text-red-700">{error}</p>
+      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-slate-900">
+        <div className="text-center p-8 bg-red-50 dark:bg-red-950 rounded-2xl border border-red-200 dark:border-red-700 max-w-md">
+          <p className="text-red-700 dark:text-red-200">{error}</p>
         </div>
       </div>
     );
@@ -173,7 +194,7 @@ export default function PatientsAppointments() {
 
   return (
     <div className="flex-1 w-full px-4 md:px-6 lg:px-8">
-      <p className="text-slate-600 ml-1 mb-1 text-sm md:text-base">Schedule, track, and manage your medical consultations.</p>
+      <p className="text-slate-600 dark:text-slate-300 ml-1 mb-1 text-sm md:text-base">Schedule, track, and manage your medical consultations.</p>
 
       <AppointmentFilterBar
         onFilterChange={setActiveFilter}
@@ -187,7 +208,7 @@ export default function PatientsAppointments() {
           // Empty State
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <svg
-              className="w-10 h-10 sm:w-12 sm:h-12 text-slate-300 mb-4"
+              className="w-10 h-10 sm:w-12 sm:h-12 text-slate-300 dark:text-slate-600 mb-4"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -199,7 +220,7 @@ export default function PatientsAppointments() {
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            <p className="text-slate-500 text-sm font-medium">
+            <p className="text-slate-500 dark:text-slate-300 text-sm font-medium">
               No appointments found for the selected filter.
             </p>
           </div>
