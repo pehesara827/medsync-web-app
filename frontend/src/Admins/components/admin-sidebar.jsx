@@ -1,167 +1,96 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  ListOrdered,
+  Users,
+  CalendarClock,
+  UserCog,
+  CreditCard,
+  Settings,
+} from 'lucide-react';
 
-const NAV_ITEMS = [
+// Central place for every admin nav entry. Add/remove items here only —
+// the sidebar below just maps over this list.
+export const NAV_ITEMS = [
   {
     id: 'dashboard',
     label: 'Dashboard',
     path: '/admin',
-    end: true, 
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-      </svg>
-    ),
+    end: true,
+    icon: LayoutDashboard,
   },
   {
     id: 'queue',
     label: 'Queue Management',
     path: '/admin/queue-management',
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-      </svg>
-    ),
+    icon: ListOrdered,
   },
   {
     id: 'patients',
     label: 'Patient Records',
-    path: '/admin/patients', // Updated with /admin prefix
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-      </svg>
-    ),
+    path: '/admin/patient-records',
+    icon: Users,
   },
   {
     id: 'schedule',
     label: 'Schedule/Delays',
-    path: '/admin/schedule', // Updated with /admin prefix
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    ),
+    path: '/admin/schedule-delays',
+    icon: CalendarClock,
   },
+  // Your teammate is building these three — routes/components already
+  // reserved so nothing breaks when they land.
   {
     id: 'staff',
     label: 'Staff Management',
-    path: '/admin/staff', // Updated with /admin prefix
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 012-2h2a2 2 0 012 2v1m-4 0h4" />
-      </svg>
-    ),
-  },
-  {
-    id: 'analytics',
-    label: 'Analytics',
-    path: '/admin/analytics', // Updated with /admin prefix
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    ),
+    path: '/admin/staff-management',
+    icon: UserCog,
   },
   {
     id: 'payments',
     label: 'Payments',
-    path: '/admin/payments', // Updated with /admin prefix
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-      </svg>
-    ),
+    path: '/admin/payments',
+    icon: CreditCard,
   },
   {
     id: 'settings',
     label: 'Settings',
-    path: '/admin/settings', // Updated with /admin prefix
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
+    path: '/admin/settings',
+    icon: Settings,
   },
 ];
 
-export default function Sidebar() {
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    alert('Logging out...');
-    navigate('/');
-  };
-
+export default function AdminSidebar() {
   return (
-    <aside 
-      aria-label="Sidebar Navigation"
-      className="w-72 bg-white border-r border-slate-200/60 flex flex-col justify-between h-screen p-4 select-none flex-shrink-0 overflow-y-auto"
-    >
-      {/* Top Section */}
-      <div className="flex flex-col gap-6">
-        
-        {/* Brand / Logo Header */}
-        <div className="flex items-center gap-3.5 px-2 pt-2">
-          <div className="w-10 h-10 rounded-xl bg-[#e6f7fa] border border-[#b2ebf2] flex items-center justify-center shadow-sm flex-shrink-0">
-            <svg className="w-5 h-5 text-[#00b0d8]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[#00b0d8] font-bold text-base leading-snug">
-              Medical Portal
-            </span>
-            <span className="text-slate-400 text-xs font-medium">
-              Clinical Precision v1.0
-            </span>
-          </div>
+    <aside className="w-64 shrink-0 bg-slate-950 text-slate-300 min-h-screen flex flex-col border-r border-slate-800">
+      <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-800">
+        <div className="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center text-slate-950 font-bold">
+          M
         </div>
-
-        {/* Navigation Links */}
-        <nav aria-label="Main Navigation">
-          <ul className="space-y-1">
-            {NAV_ITEMS.map((item) => (
-              <li key={item.id}>
-                <NavLink
-                  to={item.path}
-                  end={item.end || false} // Respects end: true on /admin
-                  className={({ isActive }) =>
-                    `flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
-                      isActive
-                        ? 'bg-[#00d2ff] text-slate-900 font-semibold shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      <span className={isActive ? 'text-slate-900' : 'text-slate-600'}>
-                        {item.icon}
-                      </span>
-                      <span>{item.label}</span>
-                    </>
-                  )}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <div>
+          <p className="text-white font-semibold leading-tight">MedSync</p>
+          <p className="text-xs text-slate-500 leading-tight">Hospital Admin</p>
+        </div>
       </div>
 
-      {/* Bottom Action Section */}
-      <div className="pt-4 mt-auto border-t border-slate-100">
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-[#ff5a5f] hover:bg-red-50 font-medium text-sm transition-colors duration-150 text-left"
-        >
-          <svg className="w-5 h-5 flex-shrink-0 text-[#ff5a5f]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          <span>Logout</span>
-        </button>
-      </div>
+      <nav className="flex-1 px-3 py-4 space-y-1">
+        {NAV_ITEMS.map(({ id, label, path, end, icon: Icon }) => (
+          <NavLink
+            key={id}
+            to={path}
+            end={end}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-cyan-500 text-slate-950'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`
+            }
+          >
+            <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
     </aside>
   );
 }
