@@ -40,7 +40,7 @@ https://drive.google.com/file/d/1UPllp0K6EYZaVefJlv7jsr37mD18uEwq/view?usp=shari
 | 8 | Appointment Reminder Notifications | **Completed** | Patients receive reminders and notifications related to their appointments. |
 | 9 | Doctor and Appointment Management Dashboard | **Completed** | Doctors and administrators can manage appointments and related information through dedicated dashboards. |
 | 10 | Multilingual Support (English/Sinhala) | **Not Implemented** | Multilingual support was not implemented in the delivered version. |
-| 11 | Intelligent Hospital Information Chatbot | **Not Implemented** | The intelligent hospital information chatbot was not implemented in the delivered version. |
+| 11 | Intelligent Hospital Information Chatbot | **Completed** | Provides users with intelligent assistance for hospital-related information. |
 
 
 ## Video Submission Link
