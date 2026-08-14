@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import PublicFooter from '../components/public-footer';
-import heroImage from '../../assets/hero.png';
+import heroImage from '../../assets/hospital.png';
 
 function Reveal({ children, delay = 0, className = '' }) {
   const ref = useRef(null);
@@ -240,8 +240,7 @@ export default function AboutPage() {
                   </svg>
                 </div>
                 <h2 className="text-2xl font-bold text-slate-900">Our Vision</h2>
-                <p className="mt-4 text-sm leading-7 text-slate-600">
-                  To pioneer a new standard of healthcare where technological sophistication meets human empathy, creating a seamless and transparent healing environment for every patient.
+                <p className="mt-4 text-sm leading-7 text-slate-600"> To pioneer a new standard of healthcare where technological sophistication seamlessly meets human empathy, creating an interconnected, transparent, and empowering healing environment for every patient. We envision a future where advanced medical ecosystems break down traditional barriers between patients and providers, leveraging real-time data sync, intelligent diagnostics, and intuitive digital touchpoints to make world-class health management universally accessible, proactive, and deeply reassuring.
                 </p>
               </div>
             </Reveal>
@@ -255,8 +254,7 @@ export default function AboutPage() {
                   </svg>
                 </div>
                 <h2 className="text-2xl font-bold text-slate-900">Our Mission</h2>
-                <p className="mt-4 text-sm leading-7 text-slate-600">
-                  To deliver precision medical care with clarity and compassion. We strive to reduce patient anxiety through structured communication and high-performance clinical practices.
+                <p className="mt-4 text-sm leading-7 text-slate-600">  To deliver precision medical care defined by uncompromising clinical excellence, total clarity, and heartfelt compassion. We are dedicated to redefining the patient journey by eliminating uncertainty through structured, transparent communication, cutting-edge digital infrastructure, and high-performance clinical practices. By bridging the gap between innovative health technology and personalized human attention, we strive to reduce medical anxiety, optimize recovery outcomes, and empower individuals to take confident control of their lifelong well-being.
                 </p>
               </div>
             </Reveal>
