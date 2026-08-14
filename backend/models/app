@@ -1,0 +1,64 @@
+import { supabase } from '../supabase.js';
+
+/**
+ * Fetches a single appointment with all related data needed for the pass.
+ * @param {string} appointmentId - The appointment UUID
+ * @returns {Promise<Object>} Appointment with joined doctor, schedule, payment, beneficiary
+ */
+export const findById = async (appointmentId) => {
+  const { data, error } = await supabase
+    .from('appointments')
+    .select(`
+      id,
+      patient_id,
+      booking_type,
+      beneficiary_id,
+      doctor_id,
+      schedule_id,
+      appointment_date,
+      status,
+      qr_code_url,
+      doctor_profiles (
+        first_name,
+        last_name,
+        specialization
+      ),
+      doctor_schedules (
+        start_time,
+        end_time,
+        consultation_fee
+      ),
+      payments (
+        payment_status,
+        payment_method,
+        amount
+      ),
+      beneficiaries (
+        full_name,
+        relationship
+      )
+    `)
+    .eq('id', appointmentId)
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Updates the qr_code_url for an appointment.
+ * @param {string} appointmentId - The appointment UUID
+ * @param {string} qrCodeUrl - The QR code Data URL or storage URL
+ * @returns {Promise<Object>} Updated appointment
+ */
+export const updateQrCodeUrl = async (appointmentId, qrCodeUrl) => {
+  const { data, error } = await supabase
+    .from('appointments')
+    .update({ qr_code_url: qrCodeUrl })
+    .eq('id', appointmentId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};

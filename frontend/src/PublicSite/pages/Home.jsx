@@ -520,6 +520,7 @@ export default function HomePage() {
       </section>
 
       <PublicFooter />
+
     </div>
   );
 }
