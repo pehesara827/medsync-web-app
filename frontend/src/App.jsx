@@ -30,6 +30,7 @@ import QueueManagement from './Admins/pages/queueManagement';
 import DoctorDashboard from './Doctors/pages/doctorsDashboard';
 
 import HomePage from './PublicSite/pages/Home';
+import AboutPage from './PublicSite/pages/About';
 import SignupPage from './PublicSite/pages/Signup';
 import LoginPage from './PublicSite/pages/Login';
 
@@ -46,6 +47,7 @@ export default function App() {
         {/* 1. PUBLIC ROUTES (Main Navbar) */}
         <Route path="/" element={<PublicLayout />}>
           <Route index element={<HomePage />} />
+          <Route path="about" element={<AboutPage />} />
           <Route path="signup" element={<SignupPage />} />
         </Route>
 
