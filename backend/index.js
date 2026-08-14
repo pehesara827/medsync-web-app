@@ -14,6 +14,7 @@ app.use(express.urlencoded({ extended: true }));
 
 import userRoutes from './routes/userRoutes.js';
 import patientRoutes from './routes/patientRoutes.js';
+import userProfileRoutes from './routes/user_profile_routes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import specialtyRoutes from './routes/specialtyRoutes.js';
 import doctorRoutes from './routes/doctorRoutes.js';
@@ -26,6 +27,8 @@ app.use('/api/appointments', appointmentRoutes);
 app.use('/api/specialties', specialtyRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/favorites', favoriteRoutes);
+
+app.use('/api/patient/profile', userProfileRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

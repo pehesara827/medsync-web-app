@@ -19,13 +19,11 @@ import AppointmentConfirmationPage from './Patients/pages/AppointmentConfirmatio
 import QRCodePage from './Patients/pages/QRCodePage';
 
 import PatientProfile from './Patients/pages/patientProfile';
-
+import ContactUs from './Patients/pages/ContactUs';
 import PatientsDoctors from './Patients/pages/patients-doctors';
-
 
 import AdminDashboard from './Admins/pages/adminDashboard';
 import QueueManagement from './Admins/pages/queueManagement';
-
 
 import DoctorDashboard from './Doctors/pages/doctorsDashboard';
 
@@ -49,10 +47,15 @@ export default function App() {
           <Route index element={<HomePage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="signup" element={<SignupPage />} />
+          <Route path="contact" element={<ContactUs />} />
         </Route>
 
         {/* Standalone login page (no navbar) */}
         <Route path="/login" element={<LoginPage />} />
+
+
+        
+          
 
         {/* 2. PATIENT ROUTES (Patient Sidebar) - Protected */}
         <Route element={<ProtectedRoute allowedRoles={['PATIENT']} />}>
@@ -61,7 +64,7 @@ export default function App() {
             <Route path="appointments" element={<PatientsAppointments />} />
             <Route path="appointments/:appointmentId" element={<AppointmentConfirmationPage />} />
             <Route path="qr-codes" element={<QRCodePage />} />
-            <Route path="profile" element={<PatientProfile />} />
+            <Route path="/patient" element={<PatientLayout />}>
             <Route path="doctors" element={<PatientsDoctors />} />
           </Route>
         </Route>
