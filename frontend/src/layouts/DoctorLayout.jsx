@@ -1,13 +1,15 @@
-// src/layouts/DoctorLayout.jsx
 import { Outlet } from 'react-router-dom';
 import DoctorSidebar from '../Doctors/components/doctor-sidebar';
+import DoctorTopbar from '../Doctors/components/doctor-topbar';
 
+// Named export to match your PublicLayout / PatientLayout / AdminLayout pattern.
 export function DoctorLayout() {
   return (
-    <div className="flex flex-col md:flex-row h-screen w-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
+    <div className="flex min-h-screen bg-slate-50">
       <DoctorSidebar />
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden pt-16 md:pt-0">
-        <main className="flex-1 overflow-y-auto scroll-smooth [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] px-4 md:px-8 py-6 md:py-8 bg-slate-50 dark:bg-slate-900">
+      <div className="flex-1 flex flex-col min-w-0">
+        <DoctorTopbar />
+        <main className="flex-1 p-8 overflow-y-auto">
           <Outlet />
         </main>
       </div>

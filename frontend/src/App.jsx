@@ -24,8 +24,18 @@ import PatientsDoctors from './Patients/pages/patients-doctors';
 
 import AdminDashboard from './Admins/pages/adminDashboard';
 import QueueManagement from './Admins/pages/queueManagement';
+import PatientRecords from './Admins/pages/patientRecords';
+import ScheduleDelays from './Admins/pages/scheduleDelays';
+import StaffManagement from './Admins/pages/staffManagement';
+import Payments from './Admins/pages/payments';
+import Settings from './Admins/pages/settings';
+import MedBotConfig from './Admins/pages/medBotConfig';
 
 import DoctorDashboard from './Doctors/pages/doctorsDashboard';
+import DoctorPatients from './Doctors/pages/doctorsPatients';
+import DoctorAppointments from './Doctors/pages/doctorsAppointments';
+import DoctorScheduleManager from './Doctors/pages/doctorsScheduleManager';
+import DoctorProfile from './Doctors/pages/doctorsProfile';
 
 import HomePage from './PublicSite/pages/Home';
 import AboutPage from './PublicSite/pages/About';
@@ -45,9 +55,6 @@ export default function App() {
         {/* 1. PUBLIC ROUTES (Main Navbar) */}
         <Route path="/" element={<PublicLayout />}>
           <Route index element={<HomePage />} />
-          <Route path="about" element={<AboutPage />} />
-          <Route path="signup" element={<SignupPage />} />
-          <Route path="contact" element={<ContactUs />} />
         </Route>
 
         {/* Standalone login page (no navbar) */}
@@ -69,19 +76,25 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* 3. DOCTOR ROUTES (Doctor Sidebar) - Protected */}
-        <Route element={<ProtectedRoute allowedRoles={['DOCTOR']} />}>
-          <Route path="/doctor" element={<DoctorLayout />}>
-            <Route index element={<DoctorDashboard />} />
-          </Route>
+        {/* 3. DOCTOR ROUTES (Doctor Sidebar) */}
+        <Route path="/doctor" element={<DoctorLayout />}>
+          <Route index element={<DoctorDashboard />} />
+          <Route path="patients" element={<DoctorPatients />} />
+          <Route path="appointments" element={<DoctorAppointments />} />
+          <Route path="schedule-manager" element={<DoctorScheduleManager />} />
+          <Route path="profile" element={<DoctorProfile />} />
         </Route>
 
-        {/* 4. ADMIN ROUTES (Admin Sidebar) - Protected */}
-        <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminDashboard />} />
-            <Route path="queue-management" element={<QueueManagement />} />
-          </Route>
+        {/* 4. ADMIN ROUTES (Admin Sidebar) */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="queue-management" element={<QueueManagement />} />
+          <Route path="patient-records" element={<PatientRecords />} />
+          <Route path="schedule-delays" element={<ScheduleDelays />} />
+          <Route path="staff-management" element={<StaffManagement />} />
+          <Route path="payments" element={<Payments />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="settings/medbot" element={<MedBotConfig />} />
         </Route>
 
         {/* Catch-all route for unknown URLs */}

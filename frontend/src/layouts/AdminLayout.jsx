@@ -1,13 +1,16 @@
-// src/layouts/AdminLayout.jsx
 import { Outlet } from 'react-router-dom';
 import AdminSidebar from '../Admins/components/admin-sidebar';
+import AdminTopbar from '../Admins/components/admin-topbar';
 
+// Named export (not default) to match PublicLayout / PatientLayout / DoctorLayout,
+// so `import { AdminLayout } from './layouts/AdminLayout'` in App.jsx works correctly.
 export function AdminLayout() {
   return (
-    <div className="flex flex-col md:flex-row h-screen w-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
+    <div className="flex min-h-screen bg-slate-50">
       <AdminSidebar />
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden pt-16 md:pt-0">
-        <main className="flex-1 overflow-y-auto scroll-smooth [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] px-4 md:px-8 py-6 md:py-8 bg-slate-50 dark:bg-slate-900">
+      <div className="flex-1 flex flex-col min-w-0">
+        <AdminTopbar />
+        <main className="flex-1 p-8 overflow-y-auto">
           <Outlet />
         </main>
       </div>
