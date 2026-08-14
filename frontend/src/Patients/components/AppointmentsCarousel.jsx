@@ -9,6 +9,18 @@ export default function AppointmentsCarousel({
   const scrollContainerRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
 
+  // Sort appointments so upcoming/scheduled ones appear first in the cluster.
+  const sortedAppointments = [...appointments].sort((a, b) => {
+    const getDisplayStatus = (item) => item.badgeStatus || item.status;
+    const priority = (item) => {
+      const status = getDisplayStatus(item);
+      if (status === 'Upcoming') return 0;
+      if (status === 'Scheduled') return 1;
+      return 2;
+    };
+    return priority(a) - priority(b);
+  });
+
   // Auto-scroll logic with smooth loop — only active in grid (carousel) mode
   useEffect(() => {
     if (viewMode === 'list') return; // No auto-scroll in list mode
@@ -41,7 +53,7 @@ export default function AppointmentsCarousel({
     return (
       <section className="w-full overflow-hidden">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 select-none">
-          {appointments.map((item) => (
+          {sortedAppointments.map((item) => (
             <div key={item.id}>
               <AppointmentCard appointment={item} />
             </div>
@@ -62,7 +74,7 @@ export default function AppointmentsCarousel({
         className="flex gap-4 md:gap-6 overflow-x-auto scroll-smooth py-2 px-1 select-none [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]"
         style={{ scrollSnapType: 'x mandatory' }}
       >
-        {appointments.map((item) => (
+        {sortedAppointments.map((item) => (
           <div
             key={item.id}
             className="flex-shrink-0 w-full sm:w-96 md:w-[520px] max-w-[90vw] md:max-w-[85vw]"

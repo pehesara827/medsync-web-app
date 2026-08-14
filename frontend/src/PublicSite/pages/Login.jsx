@@ -1,11 +1,72 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../../../supabaseClient';
 
 export default function LoginPage() {
+  const navigate = useNavigate();
   const [language, setLanguage] = useState('en');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const toggleLanguage = () => {
     setLanguage((prev) => (prev === 'en' ? 'si' : 'en'));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      // Step 1: Resolve the identifier (Email, National ID, or Phone) to an email via RPC.
+      // The RPC returns an array; pick the first matching row.
+      const { data, error: rpcError } = await supabase.rpc('get_email_by_identifier', {
+        p_identifier: identifier.trim(),
+      });
+
+      if (rpcError) {
+        throw new Error(rpcError.message);
+      }
+
+      // Normalize the response: it may be an array or a single object
+      const resolvedUser = Array.isArray(data) ? data[0] : data;
+
+      if (!resolvedUser?.user_email) {
+        setError('User not found.');
+        return;
+      }
+
+      const { user_email, user_role } = resolvedUser;
+
+      // Step 2: Authenticate with Supabase Auth using the resolved email
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user_email,
+        password,
+      });
+
+      if (authError) {
+        setError('Invalid credentials.');
+        return;
+      }
+
+      // Step 3: Role-based redirection
+      const role = (user_role || '').toUpperCase();
+      if (role === 'PATIENT') {
+        navigate('/patient');
+      } else if (role === 'DOCTOR') {
+        navigate('/doctor');
+      } else if (role === 'ADMIN') {
+        navigate('/admin');
+      } else {
+        setError('Unknown user role.');
+      }
+    } catch (err) {
+      setError(err.message || 'An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const content = {
@@ -60,10 +121,10 @@ export default function LoginPage() {
   const t = content[language];
 
   return (
-    <div className="min-h-screen bg-[#f3f8fb]">
+    <div className="min-h-screen bg-[#f3f8fb] text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="max-w-7xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
         <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-          <section className="w-full lg:w-1/2 rounded-[28px] bg-white/70 border border-slate-200 shadow-[0_24px_80px_rgba(15,23,42,0.08)] p-8 sm:p-10 backdrop-blur-sm">
+          <section className="w-full lg:w-1/2 rounded-[28px] bg-white/70 border border-slate-200 shadow-[0_24px_80px_rgba(15,23,42,0.08)] p-8 sm:p-10 backdrop-blur-sm dark:bg-slate-900/90 dark:border-slate-700">
             <div className="flex items-center justify-between mb-10">
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 rounded-2xl bg-[#00b8e6]/10 flex items-center justify-center text-[#00a8cc] shadow-sm">
@@ -72,11 +133,11 @@ export default function LoginPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm uppercase tracking-[0.35em] text-slate-400">{t.medicalPortal}</p>
-                  <p className="text-slate-600 text-sm">{t.securePatient}</p>
+                  <p className="text-sm uppercase tracking-[0.35em] text-slate-400 dark:text-slate-500">{t.medicalPortal}</p>
+                  <p className="text-slate-600 text-sm dark:text-slate-400">{t.securePatient}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-sm text-slate-500">
+              <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
                 <button
                   type="button"
                   onClick={toggleLanguage}
@@ -91,26 +152,42 @@ export default function LoginPage() {
             </div>
 
             <div className="mb-10">
-              <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">{t.welcomeBack}</h1>
-              <p className="mt-3 text-slate-600">{t.signIn}</p>
+              <h1 className="text-3xl font-semibold text-slate-900 dark:text-slate-100 sm:text-4xl">{t.welcomeBack}</h1>
+              <p className="mt-3 text-slate-600 dark:text-slate-400">{t.signIn}</p>
             </div>
 
-            <form className="space-y-5">
+            {error && (
+              <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+                <div className="flex items-start gap-3">
+                  <svg className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                  </svg>
+                  <span>{error}</span>
+                </div>
+              </div>
+            )}
+
+            <form className="space-y-5" onSubmit={handleSubmit}>
               <div>
-                <label htmlFor="login-identifier" className="mb-2 block text-sm font-semibold text-slate-700">
+                <label htmlFor="login-identifier" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">
                   {t.identifierLabel}
                 </label>
                 <input
                   id="login-identifier"
                   type="text"
+                  value={identifier}
+                  onChange={(e) => {
+                    setIdentifier(e.target.value);
+                    if (error) setError('');
+                  }}
                   placeholder={t.identifierPlaceholder}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-[#00a8cc] focus:ring-2 focus:ring-[#00b8e6]/20"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-[#00a8cc] focus:ring-2 focus:ring-[#00b8e6]/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label htmlFor="password" className="text-sm font-semibold text-slate-700">
+                  <label htmlFor="password" className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                     {t.passwordLabel}
                   </label>
                   <button type="button" className="text-sm font-medium text-[#00a8cc] hover:text-[#007b8a]">
@@ -121,14 +198,19 @@ export default function LoginPage() {
                   <input
                     id="password"
                     type="password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (error) setError('');
+                    }}
                     placeholder={t.passwordPlaceholder}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-[#00a8cc] focus:ring-2 focus:ring-[#00b8e6]/20"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-[#00a8cc] focus:ring-2 focus:ring-[#00b8e6]/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
 
               <div className="flex items-center justify-between gap-4">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#00a8cc] focus:ring-[#00b8e6]" />
                   {t.rememberDevice}
                 </label>
@@ -136,21 +218,32 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                className="w-full rounded-2xl bg-[#00b8e6] px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white shadow-[0_16px_28px_rgba(0,168,230,0.25)] transition hover:opacity-95"
+                disabled={loading}
+                className="w-full rounded-2xl bg-[#00b8e6] px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white shadow-[0_16px_28px_rgba(0,168,230,0.25)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {t.loginButton}
+                {loading ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Signing in...
+                  </span>
+                ) : (
+                  t.loginButton
+                )}
               </button>
             </form>
 
-            <div className="mt-8 text-center text-sm text-slate-500">{t.quickLogin}</div>
+            <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">{t.quickLogin}</div>
             <button
               type="button"
-              className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00a8cc] hover:text-[#007b8a]"
+              className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00a8cc] hover:text-[#007b8a] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             >
               {t.mobileOtp}
             </button>
 
-            <p className="mt-8 text-center text-sm text-slate-500">
+            <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
               {t.newPatient}{' '}
               <Link to="/signup" className="font-semibold text-[#00a8cc] hover:text-[#007b8a]">
                 {t.register}

@@ -18,7 +18,7 @@ const PAGE_TITLES = {
   '/help': 'Help Center',
 };
 
-export default function Header() {
+export default function Header({ onMenuClick }) {
   const location = useLocation();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
@@ -66,13 +66,34 @@ export default function Header() {
     'Dashboard';
 
   return (
-    <header className="w-full bg-white border-b border-slate-200/80 px-4 md:px-8 py-2.5 md:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 select-none sticky top-0 z-10">
+    <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200/80 dark:border-slate-700/80 px-4 md:px-8 py-2.5 md:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 select-none sticky top-0 z-10">
       
-      {/* Dynamic Page Title */}
-      <div>
-        <h1 className="text-lg md:text-2xl font-bold text-slate-800 tracking-tight capitalize">
-          {currentTitle}
-        </h1>
+      {/* Left: Hamburger + Title */}
+      <div className="flex items-center gap-3">
+        {/* Mobile Hamburger Button */}
+        {onMenuClick && (
+          <button
+            type="button"
+            onClick={onMenuClick}
+            aria-label="Open menu"
+            className="md:hidden p-2 -ml-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        )}
+        <div>
+          <h1 className="text-lg md:text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight capitalize">
+            {currentTitle}
+          </h1>
+        </div>
       </div>
 
       {/* Right Controls: Search, Notifications, Settings & User Avatar - Responsive */}
@@ -96,7 +117,7 @@ export default function Header() {
           <input
             type="text"
             placeholder="Search..."
-            className="w-full md:w-64 bg-slate-100/80 text-xs md:text-sm text-slate-700 placeholder-slate-400 pl-8 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 rounded-full border border-transparent focus:outline-none focus:bg-white focus:border-[#00a8cc]/50 focus:ring-2 focus:ring-[#00a8cc]/10 transition-all duration-150"
+            className="w-full md:w-64 bg-slate-100/80 dark:bg-slate-700/80 text-xs md:text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-400 pl-8 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 rounded-full border border-transparent focus:outline-none focus:bg-white dark:focus:bg-slate-700 focus:border-[#00a8cc]/50 focus:ring-2 focus:ring-[#00a8cc]/10 transition-all duration-150"
           />
         </div>
 
@@ -104,7 +125,7 @@ export default function Header() {
         <button
           type="button"
           aria-label="Notifications"
-          className="relative p-1 md:p-1.5 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors flex-shrink-0"
+          className="relative p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
         >
           <svg
             className="w-4 md:w-5 h-4 md:h-5"
@@ -130,7 +151,7 @@ export default function Header() {
           aria-expanded={isSettingsOpen}
           ref={settingsButtonRef}
           onClick={handleSettingsClick}
-          className="p-1 md:p-1.5 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors flex-shrink-0"
+          className="p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
         >
           <svg
             className="w-4 md:w-5 h-4 md:h-5"
@@ -168,7 +189,7 @@ export default function Header() {
         createPortal(
           <div
             ref={settingsRef}
-            className="fixed z-50 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden"
+            className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden"
             style={{ top: `${panelPosition.top}px`, right: `${panelPosition.right}px` }}
           >
             <Settings />

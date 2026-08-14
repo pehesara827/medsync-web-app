@@ -1,20 +1,20 @@
 export default function Step2EmergencyContact({ formData, handleChange, nextStep, prevStep }) {
   return (
     <div className="space-y-8">
-      <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+      <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
           Emergency Contact Information
         </p>
 
         <div className="mt-6 grid gap-4">
           <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-slate-700">Full Name (Primary Contact)</span>
+            <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Full Name (Primary Contact)</span>
             <input
               name="emergency_contact_name"
               value={formData.emergency_contact_name || ''}
               onChange={handleChange}
               placeholder="e.g. Jane Doe"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
 
