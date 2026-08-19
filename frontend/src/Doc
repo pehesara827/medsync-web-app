@@ -1,0 +1,201 @@
+import { useState, useEffect } from 'react';
+import { MapPin, Mail, Pencil, BadgeCheck, GraduationCap, Stethoscope } from 'lucide-react';
+import { supabase } from '../../../supabaseClient';
+
+// Static fallback data (kept for fields not in the database)
+const STATIC_PROFILE = {
+  title: 'Senior Cardiologist',
+  verified: true,
+  stats: [
+    { label: 'Yrs Experience', value: '15+' },
+    { label: 'Reviews', value: '4.9 ★' },
+    { label: 'Patients Treated', value: '500+' },
+  ],
+  contact: {
+    clinic: 'MedSync Central Clinic',
+    address: 'Block B, 4th Floor, Metropolis Medical Campus',
+    email: 'j.vance@medsync.edu',
+  },
+  bio: [
+    "Dr. Julian Vance is a board-certified Senior Cardiologist with over 15 years of dedicated experience in diagnosing and treating complex cardiovascular diseases. He specializes in interventional procedures and has been a pioneering voice in advanced heart failure management protocols within the MedSync network.",
+    "He completed his fellowship at the prestigious National Heart Institute and continues to lead clinical research trials focusing on minimally invasive valve replacements. Dr. Vance is committed to patient-centered care, integrating the latest telemetry tech to monitor patient vitals in real-time.",
+  ],
+  expertise: ['Interventional Cardiology', 'Heart Failure Management', 'Clinical Research', 'Echocardiography', 'Preventive Care'],
+  education: [
+    'MD, Johns Hopkins University School of Medicine',
+    'Fellowship in Cardiovascular Disease, National Heart Institute',
+    'Board Certified, American Board of Internal Medicine (Cardiovascular Disease)',
+  ],
+};
+
+export default function DoctorProfile() {
+  const [doctor, setDoctor] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData?.session?.user;
+        if (!user) {
+          setError('You must be logged in to view your profile.');
+          return;
+        }
+
+        const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+        const response = await fetch(`${backendUrl}/doctor/profile/${user.id}`);
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || `Failed to load profile (${response.status})`);
+        }
+        const data = await response.json();
+        setDoctor(data.doctor);
+      } catch (err) {
+        setError(`Failed to load profile: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <svg className="h-10 w-10 animate-spin text-[#00a8cc]" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-sm font-medium text-slate-500">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center p-6 bg-red-50 rounded-2xl border border-red-200 max-w-md">
+          <p className="text-red-700">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!doctor) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center p-6 bg-amber-50 rounded-2xl border border-amber-200 max-w-md">
+          <p className="text-amber-700">No doctor profile found for this account.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Build real stats from database
+  const realStats = [
+    { label: 'Yrs Experience', value: `${doctor.experienceYears}+` },
+    { label: 'Reviews', value: `${doctor.rating} ★` },
+    { label: 'Consultation Fee', value: `$${doctor.consultationFee}` },
+  ];
+
+  const displayName = doctor.fullName || 'Dr. Unknown';
+  const displayTitle = doctor.specialtyName || doctor.specialization || STATIC_PROFILE.title;
+  const displayEmail = doctor.email || STATIC_PROFILE.contact.email;
+  const displayImage = doctor.doctorImage || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256';
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-600 flex-shrink-0 overflow-hidden">
+            {displayImage && (
+              <img src={displayImage} alt={displayName} className="w-full h-full object-cover" />
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{displayName}</h1>
+              {doctor.isApproved && (
+                <span className="flex items-center gap-1 text-[10px] font-medium bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-300 px-2 py-0.5 rounded-full">
+                  <BadgeCheck className="w-3 h-3" /> Verified
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-cyan-600 dark:text-cyan-400 mt-0.5">{displayTitle}</p>
+            {doctor.medicalLicenseNo && (
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">License: {doctor.medicalLicenseNo}</p>
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mt-5 pt-5 border-t border-slate-100 dark:border-slate-700 text-center">
+          {realStats.map((s, i) => (
+            <div key={i}>
+              <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{s.value}</p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <p className="font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
+          <Stethoscope className="w-4 h-4 text-cyan-600 dark:text-cyan-400" /> Contact Info
+        </p>
+        <div className="space-y-3 mb-5 text-sm">
+          <div className="flex items-start gap-2">
+            <MapPin className="w-4 h-4 text-slate-400 dark:text-slate-500 mt-0.5" />
+            <div>
+              <p className="text-slate-900 dark:text-slate-100">{STATIC_PROFILE.contact.clinic}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">{STATIC_PROFILE.contact.address}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Mail className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+            <p className="text-slate-700 dark:text-slate-300">{displayEmail}</p>
+          </div>
+        </div>
+        <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-cyan-500 text-white text-sm font-medium hover:bg-cyan-600">
+          <Pencil className="w-4 h-4" /> Edit Profile
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <p className="font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
+          Professional Bio
+        </p>
+        <div className="space-y-3 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+          {STATIC_PROFILE.bio.map((p, i) => <p key={i}>{p}</p>)}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+          <p className="font-medium text-slate-900 dark:text-slate-100 mb-3">Clinical Expertise</p>
+          <div className="flex flex-wrap gap-2">
+            {STATIC_PROFILE.expertise.map((e, i) => (
+              <span key={i} className="text-xs font-medium bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300 px-3 py-1.5 rounded-full">{e}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+          <p className="font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-3">
+            <GraduationCap className="w-4 h-4 text-cyan-600 dark:text-cyan-400" /> Education & Board
+          </p>
+          <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+            {STATIC_PROFILE.education.map((e, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-1.5 flex-shrink-0" />
+                {e}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}

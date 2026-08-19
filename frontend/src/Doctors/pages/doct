@@ -1,0 +1,191 @@
+import { useState, useEffect } from 'react';
+import { Timer, Hourglass, ArrowRight, Clock, CalendarClock, CalendarDays } from 'lucide-react';
+import { supabase } from '../../../supabaseClient';
+
+const DURATIONS = [
+  { id: '15', label: '15 Mins', icon: Timer },
+  { id: '30', label: '30 Mins', icon: Timer },
+  { id: '45', label: '45 Mins', icon: Timer },
+  { id: '60', label: '1 Hour', icon: Hourglass },
+];
+
+// Static fallback data (kept for fields not in the database)
+const SESSION = { currentTime: '6:15 PM', scheduledStart: '6:30 PM' };
+
+const formatTime = (timeStr) => {
+  if (!timeStr) return '—';
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return timeStr;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+};
+
+export default function DoctorScheduleManager() {
+  const [selected, setSelected] = useState('30');
+  const [broadcasting, setBroadcasting] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [schedules, setSchedules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const loadSchedule = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData?.session?.user;
+        if (!user) {
+          setError('You must be logged in to view your schedule.');
+          return;
+        }
+
+        const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+        const profileResponse = await fetch(`${backendUrl}/doctor/profile/${user.id}`);
+        if (!profileResponse.ok) {
+          const errData = await profileResponse.json().catch(() => ({}));
+          throw new Error(errData.message || `Failed to load doctor profile (${profileResponse.status})`);
+        }
+        const profileData = await profileResponse.json();
+
+        const scheduleResponse = await fetch(`${backendUrl}/doctor/schedule/${profileData.doctor.id}`);
+        if (!scheduleResponse.ok) {
+          const errData = await scheduleResponse.json().catch(() => ({}));
+          throw new Error(errData.message || `Failed to load schedule (${scheduleResponse.status})`);
+        }
+        const scheduleData = await scheduleResponse.json();
+        setSchedules(scheduleData.schedules || []);
+      } catch (err) {
+        setError(`Failed to load schedule: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSchedule();
+  }, []);
+
+  const handleBroadcast = () => {
+    setBroadcasting(true);
+    setTimeout(() => {
+      setBroadcasting(false);
+      setSent(true);
+      setTimeout(() => setSent(false), 2000);
+    }, 800);
+  };
+
+  const groupedSchedules = schedules.reduce((acc, s) => {
+    if (!acc[s.available_date]) {
+      acc[s.available_date] = [];
+    }
+    acc[s.available_date].push(s);
+    return acc;
+  }, {});
+
+  const upcomingSchedules = Object.entries(groupedSchedules)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, 7);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <svg className="h-10 w-10 animate-spin text-[#00a8cc]" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-sm font-medium text-slate-500">Loading schedule...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="flex items-center justify-center">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-10 w-full max-w-lg text-center">
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Report Current Session Delay</h1>
+
+          <div className="flex items-center justify-center gap-4 mt-4 mb-8 text-sm">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300">
+              <Clock className="w-3.5 h-3.5" /> Current Time: <span className="font-semibold text-slate-900 dark:text-slate-100">{SESSION.currentTime}</span>
+            </span>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300">
+              <CalendarClock className="w-3.5 h-3.5" /> Scheduled Start: <span className="font-semibold text-slate-900 dark:text-slate-100">{SESSION.scheduledStart}</span>
+            </span>
+          </div>
+
+          <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-wide mb-3">SELECT DELAY DURATION</p>
+
+          <div className="grid grid-cols-4 gap-3 mb-8">
+            {DURATIONS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setSelected(id)}
+                className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 transition-colors ${
+                  selected === id ? 'border-cyan-600 bg-cyan-50/40 dark:bg-cyan-950/30' : 'border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
+                }`}
+              >
+                <Icon className={`w-5 h-5 ${selected === id ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                <span className={`text-sm font-medium ${selected === id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-600 dark:text-slate-300'}`}>{label}</span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={handleBroadcast}
+            disabled={broadcasting}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-cyan-700 text-white font-medium hover:bg-cyan-800 dark:hover:bg-cyan-600 disabled:opacity-60"
+          >
+            {sent ? 'Delay Broadcast Sent ✓' : broadcasting ? 'Broadcasting…' : 'Broadcast Live Delay'}
+            {!broadcasting && !sent && <ArrowRight className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Upcoming Schedule</h2>
+        </div>
+
+        {upcomingSchedules.length === 0 ? (
+          <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-6">
+            No schedule slots available. Please contact the admin to add your schedule.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {upcomingSchedules.map(([date, slots]) => (
+              <div key={date} className="border border-slate-100 dark:border-slate-700 rounded-xl p-4">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                  {new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {slots.map((slot) => (
+                    <span
+                      key={slot.id}
+                      className={`text-xs font-medium px-3 py-1.5 rounded-full ${
+                        slot.is_booked
+                          ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200/50'
+                          : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/50'
+                      }`}
+                    >
+                      {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+                      {slot.is_booked ? ' • Booked' : ' • Available'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, User, Calendar, CreditCard, ChevronDown, Loader2, AlertCircle, CheckCircle2, Upload, FileText, Building2, ArrowLeft, ArrowRight, Landmark } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import AppointmentConfirmationPass from './AppointmentConfirmationPass';
+import WaitlistModal from './WaitlistModal';
 
 export default function BookAppointmentModal({
   isOpen,
@@ -9,11 +10,18 @@ export default function BookAppointmentModal({
   initialSpecialization = '',
   initialDoctorId = '',
   initialDate = '',
+  editingAppointment = null,
+  onUpdated = null,
 }) {
+  const isEditMode = Boolean(editingAppointment);
   // ── Form state ─────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(1);
-  const [bookingType, setBookingType] = useState('self');
-  const [selectedBeneficiary, setSelectedBeneficiary] = useState('');
+  const [bookingType, setBookingType] = useState(
+    isEditMode && editingAppointment?.bookingType === 'BENEFICIARY' ? 'beneficiary' : 'self'
+  );
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState(
+    isEditMode ? editingAppointment?.beneficiaryId || '' : ''
+  );
   const [showNewBeneficiaryForm, setShowNewBeneficiaryForm] = useState(false);
   const [newBeneficiary, setNewBeneficiary] = useState({
     fullName: '',
@@ -23,7 +31,9 @@ export default function BookAppointmentModal({
   });
   const [specialization, setSpecialization] = useState('');
   const [doctor, setDoctor] = useState('');
-  const [appointmentDate, setAppointmentDate] = useState(initialDate);
+  const [appointmentDate, setAppointmentDate] = useState(
+    isEditMode ? editingAppointment?.rawDate || initialDate : initialDate
+  );
   const [timeSlot, setTimeSlot] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('online');
 
@@ -49,6 +59,10 @@ export default function BookAppointmentModal({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [confirmedAppointment, setConfirmedAppointment] = useState(null);
+  const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
+  const [waitlistSchedule, setWaitlistSchedule] = useState(null);
+  const [waitlistDoctor, setWaitlistDoctor] = useState(null);
+  const [waitlistPatientId, setWaitlistPatientId] = useState(null);
 
   // ── Resolve current patient profile id from auth session ───────────
   const resolvePatientId = useCallback(async () => {
@@ -138,6 +152,11 @@ export default function BookAppointmentModal({
             setTimeSlot('');
           }
         }
+
+        // In edit mode, pre-fill the specialization from the appointment
+        if (isEditMode && editingAppointment?.specialtyId) {
+          setSpecialization(editingAppointment.specialtyId);
+        }
       } catch (err) {
         setError(`Failed to load specializations: ${err.message}`);
       } finally {
@@ -146,7 +165,7 @@ export default function BookAppointmentModal({
     };
 
     loadSpecializations();
-  }, [isOpen, initialSpecialization]);
+  }, [isOpen, initialSpecialization, isEditMode, editingAppointment]);
 
   // ── Fetch doctors when specialization changes ──────────────────────
   useEffect(() => {
@@ -173,6 +192,11 @@ export default function BookAppointmentModal({
         if (initialDoctorId && docs.some((doc) => doc.id === initialDoctorId)) {
           setDoctor(initialDoctorId);
         }
+
+        // In edit mode, pre-fill the doctor from the appointment
+        if (isEditMode && editingAppointment?.doctorId && docs.some((doc) => doc.id === editingAppointment.doctorId)) {
+          setDoctor(editingAppointment.doctorId);
+        }
       } catch (err) {
         setError(`Failed to load doctors: ${err.message}`);
       } finally {
@@ -181,7 +205,7 @@ export default function BookAppointmentModal({
     };
 
     loadDoctors();
-  }, [specialization, initialDoctorId]);
+  }, [specialization, initialDoctorId, isEditMode, editingAppointment]);
 
   // ── Fetch available time slots when doctor + date change ───────────
   useEffect(() => {
@@ -194,14 +218,21 @@ export default function BookAppointmentModal({
       try {
         const { data, error: slotError } = await supabase
           .from('doctor_schedules')
-          .select('id, start_time, end_time, consultation_fee, is_booked')
+          .select('id, start_time, end_time, consultation_fee, is_booked, max_patients, current_appointment')
           .eq('doctor_id', doctor)
           .eq('available_date', appointmentDate)
-          .eq('is_booked', false)
           .order('start_time');
 
         if (slotError) throw slotError;
         setTimeSlots(data || []);
+
+        // In edit mode, pre-select the current schedule if it's still available
+        if (isEditMode && editingAppointment?.scheduleId) {
+          const currentSlot = (data || []).find((s) => s.id === editingAppointment.scheduleId);
+          if (currentSlot) {
+            setTimeSlot(currentSlot.id);
+          }
+        }
       } catch (err) {
         setError(`Failed to load time slots: ${err.message}`);
       } finally {
@@ -210,7 +241,7 @@ export default function BookAppointmentModal({
     };
 
     loadTimeSlots();
-  }, [doctor, appointmentDate]);
+  }, [doctor, appointmentDate, isEditMode, editingAppointment]);
 
   // ── Helpers ────────────────────────────────────────────────────────
   const formatTime = (timeStr) => {
@@ -395,9 +426,9 @@ export default function BookAppointmentModal({
       const selectedSchedule = timeSlots.find((s) => s.id === timeSlot);
       if (!selectedSchedule) throw new Error('Selected time slot is no longer available.');
 
-      // 5. Upload slip if bank transfer is selected
+      // 5. Upload slip if bank transfer is selected (only for new bookings)
       let slipUrl = null;
-      if (paymentMethod === 'bank') {
+      if (!isEditMode && paymentMethod === 'bank') {
         if (!slipFile) throw new Error('Please upload your payment slip.');
         setUploadingSlip(true);
         slipUrl = await uploadSlip(slipFile);
@@ -416,10 +447,15 @@ export default function BookAppointmentModal({
         receipt_slip_url: slipUrl,
       };
 
-      // 7. Call backend API to create appointment
+      // 7. Call backend API to create or update appointment
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-      const response = await fetch(`${backendUrl}/api/appointments`, {
-        method: 'POST',
+      const url = isEditMode
+        ? `${backendUrl}/api/appointments/${editingAppointment.id}`
+        : `${backendUrl}/api/appointments`;
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -427,15 +463,15 @@ export default function BookAppointmentModal({
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to create appointment' }));
+        const errorData = await response.json().catch(() => ({ message: 'Failed to save appointment' }));
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
       const appointmentData = result.appointment;
 
-      // 8. Update payment status if bank transfer
-      if (paymentMethod === 'bank' && appointmentData.appointmentId) {
+      // 8. Update payment status if bank transfer (only for new bookings)
+      if (!isEditMode && paymentMethod === 'bank' && appointmentData.appointmentId) {
         // Payment status is already set to PENDING_SLIP_VERIFICATION by backend
         console.log('Bank transfer payment pending verification');
       }
@@ -443,6 +479,7 @@ export default function BookAppointmentModal({
       // 9. Set confirmed appointment with server-generated data
       setConfirmedAppointment({
         appointmentId: appointmentData.appointmentId,
+        displayId: appointmentData.displayId,
         verificationCode: appointmentData.verificationCode,
         patientName: appointmentData.patientName,
         doctorName: appointmentData.doctorName,
@@ -454,8 +491,15 @@ export default function BookAppointmentModal({
         qrDataUrl: appointmentData.qrDataUrl, // Server-generated QR code
       });
 
+      // 10. Notify parent to refresh appointments after edit
+      if (isEditMode && onUpdated) {
+        onUpdated();
+      }
+
       setSuccess(
-        paymentMethod === 'bank'
+        isEditMode
+          ? 'Appointment updated successfully!'
+          : paymentMethod === 'bank'
           ? 'Appointment booked! Your payment slip has been submitted for verification.'
           : 'Appointment booked successfully!'
       );
@@ -473,7 +517,7 @@ export default function BookAppointmentModal({
   const selectedDoctor = getSelectedDoctor();
   const isBankTransfer = paymentMethod === 'bank';
   const isOnlineGateway = paymentMethod === 'online';
-  const showNextButton = isBankTransfer || isOnlineGateway;
+  const showNextButton = !isEditMode && (isBankTransfer || isOnlineGateway);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -506,7 +550,13 @@ export default function BookAppointmentModal({
           {/* Header */}
           <div className="mb-6">
             <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100">
-              {currentStep === 1 ? 'Book New Appointment' : isBankTransfer ? 'Upload Payment Slip' : 'Confirm Payment'}
+              {isEditMode
+                ? 'Edit Appointment'
+                : currentStep === 1
+                ? 'Book New Appointment'
+                : isBankTransfer
+                ? 'Upload Payment Slip'
+                : 'Confirm Payment'}
             </h2>
             {currentStep === 2 && (
               <p className="text-sm text-slate-500 dark:text-slate-300 mt-1">
@@ -764,71 +814,103 @@ export default function BookAppointmentModal({
                         </div>
                       ) : (
                         <div className="grid grid-cols-3 gap-2">
-                          {timeSlots.map((slot) => (
-                            <button
-                              key={slot.id}
-                              type="button"
-                              onClick={() => setTimeSlot(slot.id)}
-                              className={`py-2 px-3 rounded-lg text-xs font-semibold transition ${
-                                timeSlot === slot.id
-                                  ? 'bg-[#00b8e6] text-white shadow-sm'
-                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
-                              }`}
-                            >
-                              {formatTime(slot.start_time)}
-                            </button>
-                          ))}
+                         {timeSlots.map((slot) => {
+                             const isFull = (slot.current_appointment ?? 0) >= (slot.max_patients ?? 1);
+                             return (
+                               <div key={slot.id} className="flex flex-col gap-1">
+                                 <button
+                                   type="button"
+                                   onClick={() => {
+                                     if (isFull) {
+                                       setWaitlistSchedule(slot);
+                                       setWaitlistDoctor(getSelectedDoctor());
+                                       setWaitlistPatientId(currentPatientId);
+                                       setIsWaitlistModalOpen(true);
+                                     } else {
+                                       setTimeSlot(slot.id);
+                                     }
+                                   }}
+                                   className={`py-2 px-3 rounded-lg text-xs font-semibold transition ${
+                                     timeSlot === slot.id
+                                       ? 'bg-[#00b8e6] text-white shadow-sm'
+                                       : isFull
+                                       ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-200 dark:hover:bg-red-900/50'
+                                       : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                   }`}
+                                 >
+                                   {formatTime(slot.start_time)}
+                                   {isFull && <span className="ml-1 text-[9px]">(Full)</span>}
+                                 </button>
+                                 {isFull && (
+                                   <button
+                                     type="button"
+                                     onClick={() => {
+                                       setWaitlistSchedule(slot);
+                                       setWaitlistDoctor(getSelectedDoctor());
+                                       setWaitlistPatientId(currentPatientId);
+                                       setIsWaitlistModalOpen(true);
+                                     }}
+                                     className="text-[9px] text-[#00b8e6] hover:underline"
+                                   >
+                                     Join Waitlist
+                                   </button>
+                                 )}
+                               </div>
+                             );
+                           })}
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Payment Details */}
-                <div className="space-y-4">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-100">Payment Details</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('online')}
-                      className={`p-4 rounded-xl border-2 transition ${
-                        paymentMethod === 'online'
-                          ? 'border-[#00b8e6] bg-[#00b8e6]/5'
-                          : 'border-slate-200 dark:border-slate-700 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <CreditCard size={24} className={`mx-auto mb-2 ${paymentMethod === 'online' ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`} />
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Online Gateway</p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Credit/Debit Cards</p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('reception')}
-                      className={`p-4 rounded-xl border-2 transition ${
-                        paymentMethod === 'reception'
-                          ? 'border-[#00b8e6] bg-[#00b8e6]/5'
-                          : 'border-slate-200 dark:border-slate-700 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <CreditCard size={24} className={`mx-auto mb-2 ${paymentMethod === 'reception' ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`} />
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Pay at Reception</p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Cash or Card on arrival</p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('bank')}
-                      className={`p-4 rounded-xl border-2 transition ${
-                        paymentMethod === 'bank'
-                          ? 'border-[#00b8e6] bg-[#00b8e6]/5'
-                          : 'border-slate-200 dark:border-slate-700 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <Landmark size={24} className={`mx-auto mb-2 ${paymentMethod === 'bank' ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`} />
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Bank Transfer</p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Requires slip upload</p>
-                    </button>
+                {/* Payment Details - only for new bookings */}
+                {!isEditMode && (
+                  <div className="space-y-4">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-100">Payment Details</label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('online')}
+                        className={`p-4 rounded-xl border-2 transition ${
+                          paymentMethod === 'online'
+                            ? 'border-[#00b8e6] bg-[#00b8e6]/5'
+                            : 'border-slate-200 dark:border-slate-700 dark:hover:border-slate-600'
+                        }`}
+                      >
+                        <CreditCard size={24} className={`mx-auto mb-2 ${paymentMethod === 'online' ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`} />
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Online Gateway</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Credit/Debit Cards</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('reception')}
+                        className={`p-4 rounded-xl border-2 transition ${
+                          paymentMethod === 'reception'
+                            ? 'border-[#00b8e6] bg-[#00b8e6]/5'
+                            : 'border-slate-200 dark:border-slate-700 dark:hover:border-slate-600'
+                        }`}
+                      >
+                        <CreditCard size={24} className={`mx-auto mb-2 ${paymentMethod === 'reception' ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`} />
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Pay at Reception</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Cash or Card on arrival</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('bank')}
+                        className={`p-4 rounded-xl border-2 transition ${
+                          paymentMethod === 'bank'
+                            ? 'border-[#00b8e6] bg-[#00b8e6]/5'
+                            : 'border-slate-200 dark:border-slate-700 dark:hover:border-slate-600'
+                        }`}
+                      >
+                        <Landmark size={24} className={`mx-auto mb-2 ${paymentMethod === 'bank' ? 'text-[#00b8e6]' : 'text-slate-400 dark:text-slate-300'}`} />
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Bank Transfer</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Requires slip upload</p>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             )}
 
@@ -1063,25 +1145,38 @@ export default function BookAppointmentModal({
                   {submitting || uploadingSlip ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      {uploadingSlip ? 'Uploading Slip...' : 'Booking...'}
+                      {uploadingSlip ? 'Uploading Slip...' : isEditMode ? 'Saving...' : 'Booking...'}
                     </>
                   ) : (
                     <>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
-                      {isBankTransfer ? 'Submit & Book' : isOnlineGateway ? 'Proceed to Pay' : 'Confirm'}
+                      {isEditMode ? 'Save Changes' : isBankTransfer ? 'Submit & Book' : isOnlineGateway ? 'Proceed to Pay' : 'Confirm'}
                     </>
                   )}
                 </button>
               )}
             </div>
-          </form>
-        </div>
-        )}
-      </div>
-    </div>
-  );
+         </form>
+         </div>
+         )}
+
+         {/* Waitlist Modal */}
+         <WaitlistModal
+           isOpen={isWaitlistModalOpen}
+           onClose={() => setIsWaitlistModalOpen(false)}
+           doctor={waitlistDoctor}
+           schedule={waitlistSchedule}
+           patientId={waitlistPatientId}
+           onJoined={() => {
+             setIsWaitlistModalOpen(false);
+             setSuccess('You have been added to the waitlist! Check "My Waitlist" in your appointments.');
+           }}
+         />
+       </div>
+     </div>
+   );
 }
 
 

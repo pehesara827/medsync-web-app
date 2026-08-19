@@ -19,6 +19,8 @@ import appointmentRoutes from './routes/appointmentRoutes.js';
 import specialtyRoutes from './routes/specialtyRoutes.js';
 import doctorRoutes from './routes/doctorRoutes.js';
 import favoriteRoutes from './routes/favoriteRoutes.js';
+import waitlistRoutes from './routes/waitlistRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -26,7 +28,10 @@ app.use('/api/auth', patientRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/specialties', specialtyRoutes);
 app.use('/api/doctors', doctorRoutes);
+app.use('/api/doctor', doctorRoutes);
 app.use('/api/favorites', favoriteRoutes);
+app.use('/api/waitlist', waitlistRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use('/api/patient/profile', userProfileRoutes);
 

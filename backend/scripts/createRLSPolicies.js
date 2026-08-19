@@ -110,6 +110,75 @@ const policies = [
     using: null,
     withCheck: `appointment_id IN (SELECT id FROM public.appointments WHERE patient_id = ${PATIENT_ID})`,
   },
+
+  // ── waitlist ──────────────────────────────────────────────────────
+  {
+    table: 'waitlist',
+    name: 'waitlist_select_own',
+    cmd: 'SELECT',
+    using: `patient_id = ${PATIENT_ID}`,
+    withCheck: null,
+  },
+  {
+    table: 'waitlist',
+    name: 'waitlist_insert_own',
+    cmd: 'INSERT',
+    using: null,
+    withCheck: `patient_id = ${PATIENT_ID}`,
+  },
+  {
+    table: 'waitlist',
+    name: 'waitlist_select_doctor',
+    cmd: 'SELECT',
+    using: `doctor_id IN (SELECT id FROM public.doctor_profiles WHERE user_id = auth.uid())`,
+    withCheck: null,
+  },
+  {
+    table: 'waitlist',
+    name: 'waitlist_update_doctor',
+    cmd: 'UPDATE',
+    using: `doctor_id IN (SELECT id FROM public.doctor_profiles WHERE user_id = auth.uid())`,
+    withCheck: `doctor_id IN (SELECT id FROM public.doctor_profiles WHERE user_id = auth.uid())`,
+  },
+
+  // ── notifications ─────────────────────────────────────────────────
+  {
+    table: 'notifications',
+    name: 'notifications_select_own',
+    cmd: 'SELECT',
+    using: `recipient_user_id = auth.uid()`,
+    withCheck: null,
+  },
+  {
+    table: 'notifications',
+    name: 'notifications_update_own',
+    cmd: 'UPDATE',
+    using: `recipient_user_id = auth.uid()`,
+    withCheck: `recipient_user_id = auth.uid()`,
+  },
+  {
+    table: 'notifications',
+    name: 'notifications_insert_system',
+    cmd: 'INSERT',
+    using: null,
+    withCheck: `true`,
+  },
+
+  // ── notification_log ──────────────────────────────────────────────
+  {
+    table: 'notification_log',
+    name: 'notification_log_select_own',
+    cmd: 'SELECT',
+    using: `notification_id IN (SELECT id FROM public.notifications WHERE recipient_user_id = auth.uid())`,
+    withCheck: null,
+  },
+  {
+    table: 'notification_log',
+    name: 'notification_log_insert_system',
+    cmd: 'INSERT',
+    using: null,
+    withCheck: `true`,
+  },
 ];
 
 async function main() {
@@ -147,7 +216,7 @@ async function main() {
       WHERE schemaname = 'public'
         AND tablename IN (
           'specialties', 'patient_profiles', 'beneficiaries', 'doctor_profiles',
-          'doctor_schedules', 'appointments', 'payments'
+          'doctor_schedules', 'appointments', 'payments', 'waitlist'
         )
       ORDER BY tablename, policyname;
     `);

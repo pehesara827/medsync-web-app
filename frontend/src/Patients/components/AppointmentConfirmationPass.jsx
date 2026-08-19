@@ -110,6 +110,7 @@ export default function AppointmentConfirmationPass({ appointment, onDone }) {
 
   const {
     appointmentId = 'APP-00000',
+    displayId = '',
     verificationCode = '',
     patientName = '—',
     doctorName = '—',
@@ -120,6 +121,9 @@ export default function AppointmentConfirmationPass({ appointment, onDone }) {
     qrPayload = '',
     qrDataUrl = '',
   } = appointment || {};
+
+  // Prefer the structured display ID (MED-XXXXXXXX); fall back to raw appointmentId
+  const displayRef = displayId || appointmentId;
 
   // ── Toast helper ───────────────────────────────────────────────────
   const showToast = useCallback((message, type = 'success') => {
@@ -139,7 +143,7 @@ export default function AppointmentConfirmationPass({ appointment, onDone }) {
       // Download the QR image
       const link = document.createElement('a');
       link.href = qrDataUrl;
-      link.download = `QR-Code-${appointmentId}.png`;
+      link.download = `QR-Code-${displayRef}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -193,7 +197,7 @@ export default function AppointmentConfirmationPass({ appointment, onDone }) {
       pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       pdf.addImage(imgData, 'PNG', margin, yOffset, imgWidth, imgHeight);
 
-      pdf.save(`Appointment-Pass-${appointmentId}.pdf`);
+      pdf.save(`Appointment-Pass-${displayRef}.pdf`);
       showToast('Pass downloaded successfully!');
     } catch (err) {
       console.error('PDF download failed:', err);
@@ -207,7 +211,7 @@ export default function AppointmentConfirmationPass({ appointment, onDone }) {
   const buildShareText = () => {
     return [
       `Appointment Confirmed!`,
-      `Booking Reference: #${appointmentId}`,
+      `Booking Reference: ${displayRef}`,
       verificationCode ? `Check-in Code: ${verificationCode}` : '',
       `Patient: ${patientName}`,
       `Doctor: ${doctorName} - ${specialization}`,
@@ -218,7 +222,7 @@ export default function AppointmentConfirmationPass({ appointment, onDone }) {
 
   const handleShare = async () => {
     const shareData = {
-      title: `Appointment Pass #${appointmentId}`,
+      title: `Appointment Pass ${displayRef}`,
       text: buildShareText(),
       url: window.location.href,
     };
@@ -291,8 +295,8 @@ export default function AppointmentConfirmationPass({ appointment, onDone }) {
               <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">
                 Booking Ref
               </span>
-              <span className="text-white font-extrabold text-lg tracking-wide">
-                #{appointmentId}
+              <span className="text-white font-extrabold text-lg tracking-wide font-mono">
+                {displayRef}
               </span>
             </div>
 

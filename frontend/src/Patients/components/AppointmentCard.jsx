@@ -67,9 +67,9 @@ export default function AppointmentCard({ appointment}) {
             {/* Sub-info: ID & Patients Ahead - Wraps on mobile */}
             <div className="flex items-center gap-2 md:gap-3.5 text-xs font-semibold flex-wrap">
               
-              {/* ID Tag */}
-              <span className="text-[#00b0d8]">
-                #{appointment.id}
+              {/* ID Tag - Structured Display ID */}
+              <span className="text-[#00b0d8] font-mono tracking-wider">
+                {appointment.displayId || appointment.id}
               </span>
 
               {/* Patients Ahead Counter — only shown when patientsAhead is a number */}

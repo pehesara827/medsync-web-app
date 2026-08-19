@@ -4,6 +4,7 @@ import {
   generateVerificationCode,
   generateQRPayload,
 } from '../utils/qrUtils.js';
+import { notifyNextPatient } from './waitlistModel.js';
 
 /**
  * Creates a new appointment with associated payment record and QR code.
@@ -22,6 +23,24 @@ import {
  */
 export const createAppointment = async (bookingData) => {
   try {
+    // Step 0: Check schedule capacity before booking
+    const { data: schedule, error: scheduleFetchError } = await supabase
+      .from('doctor_schedules')
+      .select('max_patients, current_appointment, is_booked')
+      .eq('id', bookingData.schedule_id)
+      .single();
+
+    if (scheduleFetchError) throw scheduleFetchError;
+
+    const maxPatients = schedule.max_patients ?? 1;
+    const currentCount = schedule.current_appointment ?? 0;
+
+    if (currentCount >= maxPatients) {
+      const err = new Error('Time slot is full. Please select a different time slot.');
+      err.code = 'SLOT_FULL';
+      throw err;
+    }
+
     // Step 1: Insert the appointment record
     const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
@@ -41,10 +60,16 @@ export const createAppointment = async (bookingData) => {
 
     if (appointmentError) throw appointmentError;
 
-    // Step 2: Mark the doctor schedule slot as booked
+    // Step 2: Increment current_appointment count and set is_booked if at capacity
+    const newCount = currentCount + 1;
+    const updateData = {
+      current_appointment: newCount,
+      is_booked: newCount >= maxPatients,
+    };
+
     const { error: scheduleError } = await supabase
       .from('doctor_schedules')
-      .update({ is_booked: true })
+      .update(updateData)
       .eq('id', bookingData.schedule_id);
 
     if (scheduleError) throw scheduleError;
@@ -265,10 +290,187 @@ export const getAppointmentsByPatient = async (patientId) => {
     `
     )
     .eq('patient_id', patientId)
+    .neq('status', 'CANCELLED')
     .order('updated_at', { ascending: false })
     .order('appointment_date', { ascending: false })
     .order('created_at', { ascending: false });
 
   if (error) throw error;
   return appointments || [];
+};
+
+/**
+ * Cancels an appointment by setting its status to 'CANCELLED'.
+ * Decrements the current_appointment count on the associated doctor schedule
+ * and recalculates is_booked.
+ *
+ * @param {string} appointmentId - UUID of the appointment to cancel
+ * @returns {Promise<Object>} The updated appointment object
+ */
+export const cancelAppointment = async (appointmentId) => {
+  // Fetch the appointment to get its schedule_id
+  const { data: appointment, error: fetchError } = await supabase
+    .from('appointments')
+    .select('id, schedule_id, status')
+    .eq('id', appointmentId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  // Prevent cancelling an already-cancelled appointment
+  if (appointment.status === 'CANCELLED') {
+    const err = new Error('Appointment is already cancelled.');
+    err.code = 'ALREADY_CANCELLED';
+    throw err;
+  }
+
+  // Update appointment status to CANCELLED
+  const { data: updatedAppt, error: cancelError } = await supabase
+    .from('appointments')
+    .update({ status: 'CANCELLED' })
+    .eq('id', appointmentId)
+    .select()
+    .single();
+
+  if (cancelError) throw cancelError;
+
+  // Decrement current_appointment on the schedule and recalculate is_booked
+  if (appointment.schedule_id) {
+    const { data: schedule, error: scheduleFetchError } = await supabase
+      .from('doctor_schedules')
+      .select('current_appointment, max_patients')
+      .eq('id', appointment.schedule_id)
+      .single();
+
+    if (scheduleFetchError) throw scheduleFetchError;
+
+    const currentCount = Math.max((schedule.current_appointment ?? 0) - 1, 0);
+    const maxPatients = schedule.max_patients ?? 1;
+
+    const { error: scheduleUpdateError } = await supabase
+      .from('doctor_schedules')
+      .update({
+        current_appointment: currentCount,
+        is_booked: currentCount >= maxPatients,
+      })
+      .eq('id', appointment.schedule_id);
+
+    if (scheduleUpdateError) throw scheduleUpdateError;
+
+    // ── Waitlist Promotion Flow ─────────────────────────────────────
+    // When a slot reopens (cancellation), notify the next waitlisted patient
+    // so they get a 30-minute claim window to accept the offer.
+    try {
+      console.log(`[Waitlist] Slot reopened for schedule ${appointment.schedule_id}. Checking waitlist...`);
+      const notified = await notifyNextPatient(appointment.schedule_id);
+      if (notified) {
+        console.log(`[Waitlist] Next patient (${notified.patient_id}) notified for schedule ${appointment.schedule_id}`);
+      } else {
+        console.log(`[Waitlist] No waitlisted patients for schedule ${appointment.schedule_id}. Slot is open for general booking.`);
+      }
+    } catch (waitlistError) {
+      // Fail gracefully - the slot is still open for general booking even if
+      // the waitlist notification fails
+      console.error('[Waitlist] Failed to notify next patient:', waitlistError.message);
+    }
+  }
+
+  return updatedAppt;
+};
+
+/**
+ * Updates an existing appointment's details.
+ * If the schedule_id changes, adjusts current_appointment counts on both
+ * the old and new doctor schedule records.
+ *
+ * @param {string} appointmentId - UUID of the appointment
+ * @param {Object} updateData - Fields to update (doctor_id, schedule_id, appointment_date, booking_type, beneficiary_id)
+ * @returns {Promise<Object>} The complete updated appointment with related data
+ */
+export const updateAppointment = async (appointmentId, updateData) => {
+  // Fetch current appointment to compare schedule
+  const { data: currentAppt, error: apptFetchError } = await supabase
+    .from('appointments')
+    .select('id, schedule_id, status')
+    .eq('id', appointmentId)
+    .single();
+
+  if (apptFetchError) throw apptFetchError;
+
+  // If the schedule is changing, adjust counts on both schedules
+  if (updateData.schedule_id && updateData.schedule_id !== currentAppt.schedule_id) {
+    // Decrement old schedule if it exists
+    if (currentAppt.schedule_id) {
+      const { data: oldSchedule, error: oldFetchError } = await supabase
+        .from('doctor_schedules')
+        .select('current_appointment, max_patients')
+        .eq('id', currentAppt.schedule_id)
+        .single();
+
+      if (oldFetchError) throw oldFetchError;
+
+      const oldCount = Math.max((oldSchedule.current_appointment ?? 0) - 1, 0);
+      const oldMax = oldSchedule.max_patients ?? 1;
+
+      const { error: oldUpdateError } = await supabase
+        .from('doctor_schedules')
+        .update({
+          current_appointment: oldCount,
+          is_booked: oldCount >= oldMax,
+        })
+        .eq('id', currentAppt.schedule_id);
+
+      if (oldUpdateError) throw oldUpdateError;
+    }
+
+    // Increment new schedule (also check capacity)
+    const { data: newSchedule, error: newFetchError } = await supabase
+      .from('doctor_schedules')
+      .select('current_appointment, max_patients')
+      .eq('id', updateData.schedule_id)
+      .single();
+
+    if (newFetchError) throw newFetchError;
+
+    const newCount = (newSchedule.current_appointment ?? 0) + 1;
+    const newMax = newSchedule.max_patients ?? 1;
+
+    if (newCount > newMax) {
+      throw new Error('Time slot is full. Please select a different time slot.');
+    }
+
+    const { error: newUpdateError } = await supabase
+      .from('doctor_schedules')
+      .update({
+        current_appointment: newCount,
+        is_booked: newCount >= newMax,
+      })
+      .eq('id', updateData.schedule_id);
+
+    if (newUpdateError) throw newUpdateError;
+  }
+
+  // Build the update object (only include provided fields)
+  const updatePayload = {};
+  if (updateData.patient_id !== undefined) updatePayload.patient_id = updateData.patient_id;
+  if (updateData.booking_type !== undefined) updatePayload.booking_type = updateData.booking_type;
+  if (updateData.beneficiary_id !== undefined) updatePayload.beneficiary_id = updateData.beneficiary_id;
+  if (updateData.doctor_id !== undefined) updatePayload.doctor_id = updateData.doctor_id;
+  if (updateData.schedule_id !== undefined) updatePayload.schedule_id = updateData.schedule_id;
+  if (updateData.appointment_date !== undefined) updatePayload.appointment_date = updateData.appointment_date;
+
+  // Update the appointment record
+  const { data: updatedAppt, error: updateError } = await supabase
+    .from('appointments')
+    .update(updatePayload)
+    .eq('id', appointmentId)
+    .select()
+    .single();
+
+  if (updateError) throw updateError;
+
+  // Fetch full appointment with related data
+  const fullAppointment = await getAppointmentById(updatedAppt.id);
+
+  return fullAppointment;
 };

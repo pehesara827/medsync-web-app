@@ -106,6 +106,14 @@ export default function QRCodePage() {
     fetchAppointments();
   }, [patientId]);
 
+  // Generate a structured display ID from a UUID
+  // Format: MED-<first 8 chars of UUID uppercased, no dashes>
+  const generateDisplayId = (uuid) => {
+    if (!uuid) return 'MED-UNKNOWN';
+    const shortId = uuid.replace(/-/g, '').slice(0, 8).toUpperCase();
+    return `MED-${shortId}`;
+  };
+
   // Format time from HH:MM:SS to 12-hour format
   const formatTime = (timeStr) => {
     if (!timeStr) return '';
@@ -174,6 +182,7 @@ export default function QRCodePage() {
     const matchesSearch = 
       appt.doctor_profiles?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appt.doctor_profiles?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      generateDisplayId(appt.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
       appt.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appt.doctor_profiles?.specialties?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appt.doctor_profiles?.specialization?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -286,8 +295,8 @@ export default function QRCodePage() {
                         <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-1">
                           Booking Ref
                         </p>
-                        <p className="text-white font-bold text-lg">
-                          #{appointment.id.slice(0, 8)}
+                        <p className="text-white font-bold text-lg font-mono tracking-wider">
+                          {generateDisplayId(appointment.id)}
                         </p>
                       </div>
                       <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusBadge(appointment.status)}`}>

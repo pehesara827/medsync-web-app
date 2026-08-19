@@ -7,6 +7,18 @@ import {
 } from '../utils/qrUtils.js';
 
 /**
+ * Generates a human-readable display ID from a UUID.
+ * Format: MED-<first 8 chars of UUID uppercased, no dashes>
+ * @param {string} uuid - The appointment UUID
+ * @returns {string} e.g. 'MED-3F2A9B1C'
+ */
+const generateDisplayId = (uuid) => {
+  if (!uuid) return 'MED-UNKNOWN';
+  const shortId = uuid.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return `MED-${shortId}`;
+};
+
+/**
  * Formats a DATE column (YYYY-MM-DD) into a friendly day label.
  * @param {string} dateStr - e.g. '2026-08-09'
  * @returns {string} e.g. 'Today', 'Tomorrow', or 'Aug 9'
@@ -115,6 +127,7 @@ export const createAppointment = async (req, res, next) => {
     res.status(201).json({
       appointment: {
         appointmentId: appointment.id,
+        displayId: generateDisplayId(appointment.id),
         verificationCode,
         patientName: patientName || '—',
         doctorName: `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim() || '—',
@@ -259,6 +272,7 @@ export const getPatientAppointments = async (req, res, next) => {
 
         return {
           id: appt.id,
+          displayId: generateDisplayId(appt.id),
           status: appt.status,
           badgeStatus,
           day: formatDay(appt.appointment_date),
@@ -277,6 +291,104 @@ export const getPatientAppointments = async (req, res, next) => {
     res.json({ appointments: cards });
   } catch (error) {
     console.error('Error fetching patient appointments:', error);
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/appointments/:appointmentId/cancel
+ * Cancels an appointment and decrements the doctor schedule count.
+ */
+export const cancelAppointment = async (req, res, next) => {
+  try {
+    const { appointmentId } = req.params;
+
+    if (!appointmentId) {
+      return res.status(400).json({ message: 'Appointment ID is required.' });
+    }
+
+    const appointment = await appointmentModel.cancelAppointment(appointmentId);
+
+    res.json({
+      message: 'Appointment cancelled successfully.',
+      appointment: {
+        id: appointment.id,
+        status: appointment.status,
+      },
+    });
+  } catch (error) {
+    if (error.code === 'PGRST116') {
+      return res.status(404).json({ message: 'Appointment not found.' });
+    }
+    if (error.code === 'ALREADY_CANCELLED') {
+      return res.status(400).json({ message: error.message });
+    }
+    console.error('Error cancelling appointment:', error);
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/appointments/:appointmentId
+ * Updates an existing appointment's details.
+ */
+export const updateAppointment = async (req, res, next) => {
+  try {
+    const { appointmentId } = req.params;
+    const updateData = req.body;
+
+    if (!appointmentId) {
+      return res.status(400).json({ message: 'Appointment ID is required.' });
+    }
+
+    // Validate required fields for update
+    if (!updateData.schedule_id || !updateData.appointment_date) {
+      return res.status(400).json({ message: 'schedule_id and appointment_date are required.' });
+    }
+
+    const appointment = await appointmentModel.updateAppointment(appointmentId, updateData);
+
+    // Build response
+    const doctor = appointment.doctor_profiles || {};
+    const schedule = appointment.doctor_schedules || {};
+    const payment = appointment.payments || {};
+    const beneficiary = appointment.beneficiaries || null;
+    const specialtyName = doctor.specialties?.name || doctor.specialization || '—';
+
+    // Determine patient name
+    let patientName = '';
+    if (appointment.booking_type === 'BENEFICIARY' && beneficiary) {
+      patientName = beneficiary.relationship
+        ? `${beneficiary.full_name} (${beneficiary.relationship})`
+        : beneficiary.full_name;
+    }
+
+    if (!patientName && appointment.patient_profiles) {
+      const profile = appointment.patient_profiles;
+      patientName = `${profile.first_name} ${profile.last_name}`.trim();
+    }
+
+    res.json({
+      message: 'Appointment updated successfully.',
+      appointment: {
+        appointmentId: appointment.id,
+        displayId: generateDisplayId(appointment.id),
+        patientName: patientName || '—',
+        doctorName: `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim() || '—',
+        specialization: specialtyName,
+        appointmentDate: appointment.appointment_date || '',
+        timeSlot: formatTime(schedule.start_time),
+        paymentStatus: mapPaymentStatus(payment.payment_status),
+        bookingType: appointment.booking_type,
+        amount: payment.amount,
+        paymentMethod: payment.payment_method,
+      },
+    });
+  } catch (error) {
+    if (error.code === 'PGRST116') {
+      return res.status(404).json({ message: 'Appointment not found.' });
+    }
+    console.error('Error updating appointment:', error);
     next(error);
   }
 };

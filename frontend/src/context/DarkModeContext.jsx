@@ -1,52 +1,67 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { DarkModeContext } from './DarkModeContextValue';
+
+// Keys used to store each role's theme preference independently
+const PATIENT_KEY = 'darkMode';
+const DOCTOR_KEY = 'doctorDarkMode';
+
+// Read a saved value, falling back to system preference when unset
+function loadPreference(key) {
+  const saved = localStorage.getItem(key);
+  if (saved !== null) return JSON.parse(saved);
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return true;
+  }
+  return false;
+}
 
 // Provider component
 export function DarkModeProvider({ children }) {
-  const [darkMode, setDarkMode] = useState(() => {
-    // Check localStorage for saved preference
-    const saved = localStorage.getItem('darkMode');
-    if (saved !== null) {
-      return JSON.parse(saved);
-    }
-    // Check system preference
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return true;
-    }
-    return false;
-  });
+  const location = useLocation();
+  const isDoctor = location.pathname.startsWith('/doctor');
+  const activeRole = isDoctor ? 'doctor' : 'patient';
+  const activeKey = isDoctor ? DOCTOR_KEY : PATIENT_KEY;
 
-  // Update localStorage and document class when darkMode changes
+  // Keep each role's preference independent in a single state object
+  const [prefs, setPrefs] = useState(() => ({
+    patient: loadPreference(PATIENT_KEY),
+    doctor: loadPreference(DOCTOR_KEY),
+  }));
+
+  const darkMode = prefs[activeRole];
+
+  // Persist the active role's preference and apply/remove the dark class
   useEffect(() => {
-    localStorage.setItem('darkMode', JSON.stringify(darkMode));
-    
+    localStorage.setItem(activeKey, JSON.stringify(darkMode));
     if (darkMode) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [darkMode]);
+  }, [darkMode, activeKey]);
 
-  // Listen for system preference changes
+  // Listen for system preference changes (only when user hasn't set a preference)
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
+
     const handleChange = (e) => {
-      // Only auto-switch if user hasn't set a preference
-      const saved = localStorage.getItem('darkMode');
-      if (saved === null) {
-        setDarkMode(e.matches);
+      const active = isDoctor ? 'doctor' : 'patient';
+      const key = isDoctor ? DOCTOR_KEY : PATIENT_KEY;
+      if (localStorage.getItem(key) === null) {
+        setPrefs((prev) => ({ ...prev, [active]: e.matches }));
       }
     };
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+  }, [isDoctor]);
 
   const toggleDarkMode = (value) => {
-    setDarkMode((prev) =>
-      typeof value === 'boolean' ? value : !prev
-    );
+    setPrefs((prev) => ({
+      ...prev,
+      [activeRole]: typeof value === 'boolean' ? value : !prev[activeRole],
+    }));
   };
 
   return (

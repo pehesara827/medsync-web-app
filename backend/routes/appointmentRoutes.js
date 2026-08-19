@@ -3,6 +3,8 @@ import {
   createAppointment,
   getAppointmentPass,
   getPatientAppointments,
+  cancelAppointment,
+  updateAppointment,
 } from '../controllers/appointmentController.js';
 
 const router = Router();
@@ -15,5 +17,11 @@ router.get('/patient/:patientId', getPatientAppointments);
 
 // GET /api/appointments/:appointmentId/pass - Get appointment pass with QR
 router.get('/:appointmentId/pass', getAppointmentPass);
+
+// PATCH /api/appointments/:appointmentId/cancel - Cancel an appointment
+router.patch('/:appointmentId/cancel', cancelAppointment);
+
+// PUT /api/appointments/:appointmentId - Update an appointment
+router.put('/:appointmentId', updateAppointment);
 
 export default router;

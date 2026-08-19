@@ -48,8 +48,8 @@ function NotFound() {
 
 export default function App() {
   return (
-    <DarkModeProvider>
-      <Router>
+    <Router>
+      <DarkModeProvider>
         <Routes>
 
         {/* 1. PUBLIC ROUTES (Main Navbar) */}
@@ -71,18 +71,19 @@ export default function App() {
             <Route path="appointments" element={<PatientsAppointments />} />
             <Route path="appointments/:appointmentId" element={<AppointmentConfirmationPage />} />
             <Route path="qr-codes" element={<QRCodePage />} />
-            <Route path="/patient" element={<PatientLayout />}>
             <Route path="doctors" element={<PatientsDoctors />} />
           </Route>
         </Route>
 
-        {/* 3. DOCTOR ROUTES (Doctor Sidebar) */}
-        <Route path="/doctor" element={<DoctorLayout />}>
-          <Route index element={<DoctorDashboard />} />
-          <Route path="patients" element={<DoctorPatients />} />
-          <Route path="appointments" element={<DoctorAppointments />} />
-          <Route path="schedule-manager" element={<DoctorScheduleManager />} />
-          <Route path="profile" element={<DoctorProfile />} />
+        {/* 3. DOCTOR ROUTES (Doctor Sidebar) - Protected */}
+        <Route element={<ProtectedRoute allowedRoles={['DOCTOR']} />}>
+          <Route path="/doctor" element={<DoctorLayout />}>
+            <Route index element={<DoctorDashboard />} />
+            <Route path="patients" element={<DoctorPatients />} />
+            <Route path="appointments" element={<DoctorAppointments />} />
+            <Route path="schedule-manager" element={<DoctorScheduleManager />} />
+            <Route path="profile" element={<DoctorProfile />} />
+          </Route>
         </Route>
 
         {/* 4. ADMIN ROUTES (Admin Sidebar) */}
@@ -101,7 +102,7 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
 
       </Routes>
+      </DarkModeProvider>
     </Router>
-    </DarkModeProvider>
   );
 }
