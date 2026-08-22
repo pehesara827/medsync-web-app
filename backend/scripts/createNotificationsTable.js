@@ -20,23 +20,31 @@ const sql = `
 -- 1. Notifications table — in-app notification records
 CREATE TABLE IF NOT EXISTS public.notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    recipient_user_id UUID NOT NULL,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('WAITLIST_OFFER', 'WAITLIST_JOIN', 'APPOINTMENT_REMINDER', 'SYSTEM')),
+    user_id UUID NOT NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN (
+        'WAITLIST_OFFER',
+        'WAITLIST_EXPIRED',
+        'APPOINTMENT_CONFIRMED',
+        'APPOINTMENT_CANCELLED',
+        'SESSION_DELAY',
+        'PAYMENT_RECEIVED',
+        'GENERAL'
+    )),
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
-    schedule_id UUID DEFAULT NULL,
-    appointment_id UUID DEFAULT NULL,
-    waitlist_id UUID DEFAULT NULL,
     is_read BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    read_at TIMESTAMPTZ,
+    action_link TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id)
+        REFERENCES public.users(id) ON DELETE CASCADE
 );
 
--- Indexes for fast lookups
-CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON public.notifications(recipient_user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_notifications_unread ON public.notifications(recipient_user_id, is_read, created_at);
-CREATE INDEX IF NOT EXISTS idx_notifications_type ON public.notifications(type);
-CREATE INDEX IF NOT EXISTS idx_notifications_schedule ON public.notifications(schedule_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_waitlist ON public.notifications(waitlist_id);
+-- Index for instant lookup of a user's unread & latest notifications
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+    ON public.notifications(user_id, is_read, created_at DESC);
 
 -- 2. Notification log table — records SMS/Email/Push delivery attempts (placeholder for future providers)
 CREATE TABLE IF NOT EXISTS public.notification_log (

@@ -29,10 +29,10 @@ export default function WaitlistStatusCard({ entry, onAccept, onDecline, onCance
 
   const [timeLeft, setTimeLeft] = useState('');
   useEffect(() => {
-    if (entry.status !== 'NOTIFIED' || !entry.claim_window_expires_at) return;
+    if (entry.status !== 'NOTIFIED' || !entry.expires_at) return;
     const updateTimer = () => {
       const now = new Date();
-      const expiry = new Date(entry.claim_window_expires_at);
+      const expiry = new Date(entry.expires_at);
       const diff = Math.max(0, Math.floor((expiry - now) / 1000));
       if (diff <= 0) {
         setTimeLeft('Expired');
@@ -45,7 +45,7 @@ export default function WaitlistStatusCard({ entry, onAccept, onDecline, onCance
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [entry.status, entry.claim_window_expires_at]);
+  }, [entry.status, entry.expires_at]);
 
   const doctor = entry.doctor_profiles || {};
   const schedule = entry.doctor_schedules || {};
@@ -65,9 +65,9 @@ export default function WaitlistStatusCard({ entry, onAccept, onDecline, onCance
               <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${config.color} ${config.bg}`}>
                 {config.label}
               </span>
-              {entry.position && entry.status === 'WAITING' && (
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  Position #{entry.position}
+              {entry.status === 'WAITING' && (
+                <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                  In Queue
                 </span>
               )}
             </div>
@@ -164,4 +164,4 @@ export default function WaitlistStatusCard({ entry, onAccept, onDecline, onCance
       </div>
     </div>
   );
-}
+}

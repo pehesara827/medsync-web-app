@@ -359,7 +359,7 @@ export const cancelAppointment = async (appointmentId) => {
 
     // ── Waitlist Promotion Flow ─────────────────────────────────────
     // When a slot reopens (cancellation), notify the next waitlisted patient
-    // so they get a 30-minute claim window to accept the offer.
+    // so they get a 2-hour claim window to accept the offer.
     try {
       console.log(`[Waitlist] Slot reopened for schedule ${appointment.schedule_id}. Checking waitlist...`);
       const notified = await notifyNextPatient(appointment.schedule_id);

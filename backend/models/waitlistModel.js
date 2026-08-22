@@ -3,8 +3,8 @@ import { createAppointment } from './appointmentModel.js';
 import { createNotification } from './notificationModel.js';
 
 /**
- * Creates a new waitlist entry for a patient when a schedule slot is full.
- * Implements FIFO by computing the next position number.
+ * Creates a new waitlist entry for a patient when a schedule slot is at full capacity.
+ * Implements FIFO by using created_at ordering.
  *
  * @param {Object} data - Waitlist data
  * @param {string} data.patient_id - UUID of the patient
@@ -37,7 +37,7 @@ export const joinWaitlist = async (data) => {
 
     // Check for duplicate active waitlist entry (WAITING or NOTIFIED)
     const { data: existing, error: dupError } = await supabase
-      .from('waitlist')
+      .from('appointment_waitlists')
       .select('id, status')
       .eq('patient_id', data.patient_id)
       .eq('schedule_id', data.schedule_id)
@@ -52,20 +52,9 @@ export const joinWaitlist = async (data) => {
       throw err;
     }
 
-    // Compute next FIFO position (count of active WAITING entries + 1)
-    const { count, error: countError } = await supabase
-      .from('waitlist')
-      .select('id', { count: 'exact', head: true })
-      .eq('schedule_id', data.schedule_id)
-      .eq('status', 'WAITING');
-
-    if (countError) throw countError;
-
-    const position = (count || 0) + 1;
-
-    // Insert waitlist entry
+    // Insert waitlist entry (FIFO is determined by created_at ordering)
     const { data: waitlistEntry, error: insertError } = await supabase
-      .from('waitlist')
+      .from('appointment_waitlists')
       .insert([
         {
           patient_id: data.patient_id,
@@ -74,7 +63,6 @@ export const joinWaitlist = async (data) => {
           booking_type: data.booking_type || 'SELF',
           beneficiary_id: data.beneficiary_id || null,
           status: 'WAITING',
-          position,
         },
       ])
       .select()
@@ -97,7 +85,7 @@ export const joinWaitlist = async (data) => {
  */
 export const getWaitlistEntryById = async (waitlistId) => {
   const { data, error } = await supabase
-    .from('waitlist')
+    .from('appointment_waitlists')
     .select(
       `
       *,
@@ -150,7 +138,7 @@ export const getWaitlistEntryById = async (waitlistId) => {
  */
 export const getWaitlistByPatient = async (patientId) => {
   const { data, error } = await supabase
-    .from('waitlist')
+    .from('appointment_waitlists')
     .select(
       `
       *,
@@ -189,7 +177,7 @@ export const getWaitlistByPatient = async (patientId) => {
  */
 export const getWaitlistByDoctor = async (doctorId) => {
   const { data, error } = await supabase
-    .from('waitlist')
+    .from('appointment_waitlists')
     .select(
       `
       *,
@@ -216,7 +204,7 @@ export const getWaitlistByDoctor = async (doctorId) => {
     )
     .eq('doctor_id', doctorId)
     .order('schedule_id')
-    .order('position', { ascending: true });
+    .order('created_at', { ascending: true });
 
   if (error) throw error;
   return data || [];
@@ -230,7 +218,7 @@ export const getWaitlistByDoctor = async (doctorId) => {
  */
 export const getNextInQueue = async (scheduleId) => {
   const { data, error } = await supabase
-    .from('waitlist')
+    .from('appointment_waitlists')
     .select(
       `
       *,
@@ -267,7 +255,7 @@ export const getNextInQueue = async (scheduleId) => {
 
 /**
  * Notifies the next WAITING patient for a schedule.
- * Sets status to NOTIFIED, records notified_at, and sets a 30-minute claim window.
+ * Sets status to NOTIFIED, records notified_at, and sets a 2-hour claim window.
  *
  * @param {string} scheduleId - UUID of the doctor schedule
  * @returns {Promise<Object|null>} The notified waitlist entry or null if queue is empty
@@ -293,7 +281,7 @@ export const notifyNextPatient = async (scheduleId) => {
     // Check if there's already a NOTIFIED patient for this schedule
     // (prevents double-notifying while someone still has an active claim window)
     const { data: existingNotified, error: notifiedError } = await supabase
-      .from('waitlist')
+      .from('appointment_waitlists')
       .select('id')
       .eq('schedule_id', scheduleId)
       .eq('status', 'NOTIFIED')
@@ -306,17 +294,17 @@ export const notifyNextPatient = async (scheduleId) => {
     const nextPatient = await getNextInQueue(scheduleId);
     if (!nextPatient) return null;
 
-    const claimWindowMs = 30 * 60 * 1000; // 30 minutes
+    const claimWindowMs = 2 * 60 * 60 * 1000; // 2 hours
     const now = new Date();
     const expiresAt = new Date(now.getTime() + claimWindowMs);
 
     // Set status to NOTIFIED with claim window
     const { data: updated, error: updateError } = await supabase
-      .from('waitlist')
+      .from('appointment_waitlists')
       .update({
         status: 'NOTIFIED',
         notified_at: now.toISOString(),
-        claim_window_expires_at: expiresAt.toISOString(),
+        expires_at: expiresAt.toISOString(),
         updated_at: now.toISOString(),
       })
       .eq('id', nextPatient.id)
@@ -324,6 +312,27 @@ export const notifyNextPatient = async (scheduleId) => {
       .single();
 
     if (updateError) throw updateError;
+
+    // Create an in-app notification for the patient (slot available / waitlist offer)
+    try {
+      const patientUserId = nextPatient.patient_profiles?.user_id;
+
+      if (patientUserId) {
+        await createNotification({
+          user_id: patientUserId, // The user ID of the waitlisted patient
+          type: 'WAITLIST_OFFER', // Validated enum type
+          title: 'A slot has opened up!',
+          message: 'A slot in your waitlisted schedule is now available. You have 2 hours to confirm your appointment.',
+          action_link: `/patient/appointments?claim=${updated.id}`, // Deep link to open the pre-filled appointment form
+          metadata: {
+            schedule_id: scheduleId,
+            waitlist_id: updated.id,
+          },
+        });
+      }
+    } catch (notifError) {
+      console.error('[Waitlist] Failed to create slot-available notification:', notifError.message);
+    }
 
     console.log(
       `[Waitlist] Notified patient ${updated.patient_id} for schedule ${scheduleId}. Claim window expires at ${expiresAt.toISOString()}`
@@ -368,7 +377,7 @@ export const acceptWaitlistOffer = async (waitlistId, paymentData = {}) => {
     }
 
     // Check if claim window has expired
-    if (waitlistEntry.claim_window_expires_at && new Date(waitlistEntry.claim_window_expires_at) < new Date()) {
+    if (waitlistEntry.expires_at && new Date(waitlistEntry.expires_at) < new Date()) {
       // Mark as EXPIRED and cascade to next
       await declineWaitlistOffer(waitlistId, 'EXPIRED');
 
@@ -409,7 +418,7 @@ export const acceptWaitlistOffer = async (waitlistId, paymentData = {}) => {
 
     // Update waitlist entry to CONVERTED
     const { data: converted, error: updateError } = await supabase
-      .from('waitlist')
+      .from('appointment_waitlists')
       .update({
         status: 'CONVERTED',
         updated_at: new Date().toISOString(),
@@ -434,16 +443,34 @@ export const acceptWaitlistOffer = async (waitlistId, paymentData = {}) => {
 /**
  * Declines a waitlist offer (SKIPPED or EXPIRED) and cascades to the next patient.
  *
+ * For EXPIRED offers (patient failed to respond within the 2-hour window):
+ *   - Sends a WAITLIST_EXPIRED notification to the patient informing them they
+ *     missed their chance
+ *   - Deletes the waitlist entry from the table
+ *
+ * For SKIPPED offers (patient explicitly declined):
+ *   - Marks the entry as SKIPPED (keeps the record)
+ *
  * @param {string} waitlistId - UUID of the waitlist entry
  * @param {string} status - 'SKIPPED' (patient declined) or 'EXPIRED' (timer ran out)
- * @returns {Promise<Object>} The updated waitlist entry
+ * @returns {Promise<Object>} The updated or deleted waitlist entry
  */
 export const declineWaitlistOffer = async (waitlistId, status = 'SKIPPED') => {
   try {
-    // Fetch the waitlist entry
+    // Fetch the waitlist entry with patient user_id (for notification on EXPIRED)
     const { data: waitlistEntry, error: fetchError } = await supabase
-      .from('waitlist')
-      .select('id, schedule_id, status')
+      .from('appointment_waitlists')
+      .select(`
+        id,
+        schedule_id,
+        status,
+        patient_id,
+        patient_profiles (
+          user_id,
+          first_name,
+          last_name
+        )
+      `)
       .eq('id', waitlistId)
       .single();
 
@@ -455,9 +482,54 @@ export const declineWaitlistOffer = async (waitlistId, status = 'SKIPPED') => {
       throw err;
     }
 
-    // Update to SKIPPED or EXPIRED
+    // ── EXPIRED: send "missed your chance" notification + delete from table ──
+    if (status === 'EXPIRED') {
+      // Send a notification to the patient informing them they missed the offer
+      try {
+        const patientUserId = waitlistEntry.patient_profiles?.user_id;
+
+        if (patientUserId) {
+          await createNotification({
+            user_id: patientUserId,
+            type: 'WAITLIST_EXPIRED',
+            title: 'Missed your chance',
+            message: 'You did not respond to the available slot within the 2-hour window. The offer has expired and your waitlist entry has been removed.',
+            action_link: '/patient/appointments',
+            metadata: {
+              schedule_id: waitlistEntry.schedule_id,
+              waitlist_id: waitlistId,
+            },
+          });
+        }
+      } catch (notifError) {
+        console.error('[Waitlist] Failed to send expiry notification:', notifError.message);
+      }
+
+      // Delete the waitlist entry from the table (as requested)
+      const { error: deleteError } = await supabase
+        .from('appointment_waitlists')
+        .delete()
+        .eq('id', waitlistId);
+
+      if (deleteError) throw deleteError;
+
+      console.log(`[Waitlist] Entry ${waitlistId} expired and removed from table. Sending "missed your chance" notification. Cascading to next patient for schedule ${waitlistEntry.schedule_id}`);
+
+      // Cascade to the next patient in the queue
+      await notifyNextPatient(waitlistEntry.schedule_id);
+
+      return {
+        id: waitlistId,
+        status: 'EXPIRED',
+        deleted: true,
+        schedule_id: waitlistEntry.schedule_id,
+        patient_id: waitlistEntry.patient_id,
+      };
+    }
+
+    // ── SKIPPED: mark as SKIPPED (keep the record) ──
     const { data: updated, error: updateError } = await supabase
-      .from('waitlist')
+      .from('appointment_waitlists')
       .update({
         status,
         updated_at: new Date().toISOString(),
@@ -480,7 +552,11 @@ export const declineWaitlistOffer = async (waitlistId, status = 'SKIPPED') => {
 
 /**
  * Expires all NOTIFIED waitlist entries whose claim window has passed.
- * Cascades each to the next patient in line.
+ * Sends a "missed your chance" notification to each, deletes the entry,
+ * and cascades to the next patient in the FIFO queue.
+ *
+ * Each entry is processed independently — a failure on one entry is logged
+ * but does not abort the batch (graceful degradation).
  *
  * @returns {Promise<number>} Number of expired entries
  */
@@ -489,18 +565,23 @@ export const expireExpiredOffers = async () => {
     const now = new Date();
 
     const { data: expiredEntries, error } = await supabase
-      .from('waitlist')
+      .from('appointment_waitlists')
       .select('id, schedule_id')
       .eq('status', 'NOTIFIED')
-      .lt('claim_window_expires_at', now.toISOString());
+      .lt('expires_at', now.toISOString());
 
     if (error) throw error;
 
     let expiredCount = 0;
 
     for (const entry of expiredEntries || []) {
-      await declineWaitlistOffer(entry.id, 'EXPIRED');
-      expiredCount++;
+      try {
+        await declineWaitlistOffer(entry.id, 'EXPIRED');
+        expiredCount++;
+      } catch (err) {
+        // One failure shouldn't abort the whole batch — log and continue
+        console.error(`[Waitlist] Failed to expire entry ${entry.id}:`, err.message);
+      }
     }
 
     if (expiredCount > 0) {
@@ -523,7 +604,7 @@ export const expireExpiredOffers = async () => {
 export const cancelWaitlistEntry = async (waitlistId, patientId) => {
   try {
     const { data: entry, error: fetchError } = await supabase
-      .from('waitlist')
+      .from('appointment_waitlists')
       .select('id, patient_id, status')
       .eq('id', waitlistId)
       .single();
@@ -543,7 +624,7 @@ export const cancelWaitlistEntry = async (waitlistId, patientId) => {
     }
 
     const { data: cancelled, error: updateError } = await supabase
-      .from('waitlist')
+      .from('appointment_waitlists')
       .update({
         status: 'CANCELLED',
         updated_at: new Date().toISOString(),

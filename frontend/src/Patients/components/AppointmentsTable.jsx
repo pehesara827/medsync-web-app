@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { QrCode, MoreHorizontal, Pencil, XCircle } from 'lucide-react';
+import { QrCode, MoreHorizontal, Pencil, XCircle, Star } from 'lucide-react';
 
 /**
  * Returns Tailwind CSS classes for the status badge based on appointment status.
@@ -33,62 +34,152 @@ const canViewQR = (appointment) => {
 };
 
 /**
- * Dropdown menu component for appointment actions (Edit / Cancel).
+ * Resolves the "normalized" display status used for action logic.
+ * Returns the badgeStatus if available, otherwise the raw status.
  */
-function ActionsMenu({ appointment, onEdit, onCancel }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef(null);
+const getNormalizedStatus = (appointment) => {
+  return (appointment.badgeStatus || appointment.status || '').toUpperCase();
+};
 
-  // Close the dropdown when clicking outside
+/**
+ * Dropdown menu component for appointment actions (Edit / Cancel / Review).
+ * Action visibility is driven by the appointment's status:
+ *   - Completed  → Review only
+ *   - Cancelled  → No actions (menu hidden entirely)
+ *   - Other      → Edit + Cancel
+ *
+ * The dropdown is rendered via a React portal at the document body level so it
+ * is never clipped by ancestor containers with `overflow` (e.g. the table's
+ * `overflow-x-auto` wrapper).
+ */
+function ActionsMenu({ appointment, onEdit, onCancel, onReview }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
+  const buttonRef = useRef(null);
+
+  // Close the dropdown when clicking outside.
+  // Uses 'click' (not 'mousedown') so that clicking a menu item inside the
+  // portal fires its onClick first, then the outside-click handler closes the
+  // dropdown. Using 'mousedown' would unmount the portal before the menu
+  // item's click event fires, preventing the action (e.g. opening Review).
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+      if (buttonRef.current && !buttonRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    const handleScroll = () => setIsOpen(false);
+    const handleResize = () => setIsOpen(false);
+    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [isOpen]);
+
+  const status = getNormalizedStatus(appointment);
+
+  // Don't render the menu at all for cancelled appointments
+  if (status === 'CANCELLED') {
+    return null;
+  }
+
+  // Build the list of available actions based on status
+  const actions = [];
+
+  if (status === 'COMPLETED') {
+    // Only show Review for completed appointments
+    actions.push({
+      label: 'Review',
+      icon: <Star size={14} className="text-[#00b8e6]" />,
+      onClick: () => {
+        setIsOpen(false);
+        onReview(appointment);
+      },
+      className: 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700',
+    });
+  } else {
+    // For upcoming / scheduled appointments: Edit + Cancel
+    actions.push({
+      label: 'Edit',
+      icon: <Pencil size={14} className="text-[#00b8e6]" />,
+      onClick: () => {
+        setIsOpen(false);
+        onEdit(appointment);
+      },
+      className: 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700',
+    });
+    actions.push({
+      label: 'Cancel',
+      icon: <XCircle size={14} />,
+      onClick: () => {
+        setIsOpen(false);
+        onCancel(appointment);
+      },
+      className: 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30',
+    });
+  }
+
+  const handleToggle = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setMenuPos({
+        top: rect.bottom + 4,
+        left: rect.right,
+      });
+    }
+    setIsOpen((prev) => !prev);
+  };
 
   return (
-    <div className="relative inline-block" ref={menuRef}>
+    <>
       <button
-        onClick={() => setIsOpen((prev) => !prev)}
+        ref={buttonRef}
+        onClick={handleToggle}
         className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
         aria-label="Appointment actions"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
       >
         <MoreHorizontal size={18} />
       </button>
 
-      {isOpen && (
-        <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-lg z-20 py-1">
-          <button
-            onClick={() => {
-              setIsOpen(false);
-              onEdit(appointment);
-            }}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition text-left"
+      {isOpen &&
+        menuPos &&
+        createPortal(
+          <div
+            role="menu"
+            className="fixed z-[100] w-40 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-lg py-1"
+            style={{ top: menuPos.top, left: menuPos.left, transform: 'translateX(-100%)' }}
           >
-            <Pencil size={14} className="text-[#00b8e6]" />
-            Edit
-          </button>
-          <button
-            onClick={() => {
-              setIsOpen(false);
-              onCancel(appointment);
-            }}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition text-left"
-          >
-            <XCircle size={14} />
-            Cancel
-          </button>
-        </div>
-      )}
-    </div>
+            {actions.map((action) => (
+              <button
+                key={action.label}
+                role="menuitem"
+                onClick={action.onClick}
+                className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition text-left ${action.className}`}
+              >
+                {action.icon}
+                {action.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 
-export default function AppointmentsTable({ appointments = [], onEdit, onCancel }) {
+export default function AppointmentsTable({
+  appointments = [],
+  onEdit,
+  onCancel,
+  onReview,
+}) {
   const navigate = useNavigate();
 
   const handleViewPass = (appointmentId) => {
@@ -118,23 +209,23 @@ export default function AppointmentsTable({ appointments = [], onEdit, onCancel 
                       alt={appointment.doctorName}
                       className="w-10 h-10 rounded-full object-cover"
                     />
-                   ) : (
-                     <div className="w-10 h-10 rounded-full bg-[#e6f7fa] dark:bg-slate-700 flex items-center justify-center">
-                       <svg className="w-5 h-5 text-[#00b0d8] dark:text-cyan-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                         <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                       </svg>
-                     </div>
-                   )}
-                   <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
-                 </div>
-                 <div className="flex flex-col">
-                   <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
-                     {appointment.doctorName}
-                   </span>
-                   <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                     {appointment.specialization}
-                   </span>
-                 </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[#e6f7fa] dark:bg-slate-700 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-[#00b0d8] dark:text-cyan-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                    {appointment.doctorName}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    {appointment.specialization}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <span
@@ -146,6 +237,7 @@ export default function AppointmentsTable({ appointments = [], onEdit, onCancel 
                   appointment={appointment}
                   onEdit={onEdit}
                   onCancel={onCancel}
+                  onReview={onReview}
                 />
               </div>
             </div>
@@ -212,23 +304,23 @@ export default function AppointmentsTable({ appointments = [], onEdit, onCancel 
                           alt={appointment.doctorName}
                           className="w-10 h-10 rounded-full object-cover"
                         />
-                       ) : (
-                         <div className="w-10 h-10 rounded-full bg-[#e6f7fa] dark:bg-slate-700 flex items-center justify-center">
-                           <svg className="w-5 h-5 text-[#00b0d8] dark:text-cyan-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                             <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                           </svg>
-                         </div>
-                       )}
-                       <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
-                     </div>
-                     <div className="flex flex-col text-left">
-                       <span className="font-bold text-slate-800 dark:text-slate-100 text-sm whitespace-nowrap">
-                         {appointment.doctorName}
-                       </span>
-                       <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                         {appointment.specialization}
-                       </span>
-                     </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-[#e6f7fa] dark:bg-slate-700 flex items-center justify-center">
+                          <svg className="w-5 h-5 text-[#00b0d8] dark:text-cyan-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="font-bold text-slate-800 dark:text-slate-100 text-sm whitespace-nowrap">
+                        {appointment.doctorName}
+                      </span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        {appointment.specialization}
+                      </span>
+                    </div>
                   </div>
                 </td>
                 <td className="py-4 text-slate-500 dark:text-slate-300 font-medium text-sm whitespace-nowrap text-center">
@@ -262,6 +354,7 @@ export default function AppointmentsTable({ appointments = [], onEdit, onCancel 
                     appointment={appointment}
                     onEdit={onEdit}
                     onCancel={onCancel}
+                    onReview={onReview}
                   />
                 </td>
               </tr>

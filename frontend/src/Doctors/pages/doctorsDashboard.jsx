@@ -2,19 +2,6 @@ import { useState, useEffect } from 'react';
 import { Users, Star, MessageSquare, Clock, BarChart3 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 
-// Static fallback data (kept for fields not in the database)
-const DAILY_VOLUME = [30, 55, 40, 90, 45, 60, 35];
-const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-// Static recent reviews (placeholder — consistent with existing static data pattern)
-const RECENT_REVIEWS = [
-  { id: 1, patient: 'Sarah Johnson', rating: 5, comment: 'Excellent care, very thorough examination.', time: '2 hours ago' },
-  { id: 2, patient: 'Michael Chen', rating: 4, comment: 'Great doctor, very knowledgeable and patient.', time: 'Yesterday' },
-  { id: 3, patient: 'Emily Davis', rating: 5, comment: 'Very professional. Highly recommend!', time: '2 days ago' },
-  { id: 4, patient: 'Robert Wilson', rating: 4, comment: 'Good experience overall. Wait time was reasonable.', time: '3 days ago' },
-  { id: 5, patient: 'Lisa Thompson', rating: 5, comment: 'Took time to explain everything clearly.', time: '5 days ago' },
-];
-
 const formatTime = (timeStr) => {
   if (!timeStr) return '—';
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -29,12 +16,39 @@ const getTimePeriod = (timeStr) => {
   return hours >= 12 ? 'PM' : 'AM';
 };
 
+// Format an ISO timestamp into a friendly relative label (e.g. "2 hours ago", "Yesterday")
+const formatRelativeTime = (isoStr) => {
+  if (!isoStr) return '—';
+  const date = new Date(isoStr);
+  if (Number.isNaN(date.getTime())) return '—';
+
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffWeeks < 5) return `${diffWeeks} week${diffWeeks === 1 ? '' : 's'} ago`;
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 export default function DoctorDashboard() {
   const today = new Date();
   const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   const [doctor, setDoctor] = useState(null);
   const [appointments, setAppointments] = useState([]);
+  const [weeklyData, setWeeklyData] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -57,6 +71,15 @@ export default function DoctorDashboard() {
         const profileData = await profileResponse.json();
         setDoctor(profileData.doctor);
 
+        // Fetch reviews for this doctor
+        const reviewsResponse = await fetch(`${backendUrl}/reviews/doctor/${profileData.doctor.id}`);
+        if (!reviewsResponse.ok) {
+          const errData = await reviewsResponse.json().catch(() => ({}));
+          throw new Error(errData.message || `Failed to load reviews (${reviewsResponse.status})`);
+        }
+        const reviewsData = await reviewsResponse.json();
+        setReviews(reviewsData.reviews || []);
+
         const todayStr = new Date().toISOString().split('T')[0];
         const apptResponse = await fetch(`${backendUrl}/doctor/appointments/${profileData.doctor.id}`);
         if (!apptResponse.ok) {
@@ -70,6 +93,13 @@ export default function DoctorDashboard() {
           .filter((a) => a.appointmentDate === todayStr)
           .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
         setAppointments(todaysAppts);
+
+        // Fetch weekly patient counts for the bar graph
+        const weeklyResponse = await fetch(`${backendUrl}/doctor/weekly-stats/${profileData.doctor.id}`);
+        if (weeklyResponse.ok) {
+          const weeklyData = await weeklyResponse.json();
+          setWeeklyData(weeklyData.weekly || []);
+        }
       } catch (err) {
         setError(`Failed to load dashboard: ${err.message}`);
       } finally {
@@ -84,6 +114,11 @@ export default function DoctorDashboard() {
   const totalCount = appointments.length;
   const pendingCount = appointments.filter((a) => a.status === 'PENDING').length;
   const progressPct = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+  // Weekly patient counts fetched from the backend
+  const weeklyTotal = weeklyData.reduce((sum, d) => sum + d.count, 0);
+  const peakDay = weeklyData.reduce((max, d) => (d.count > max.count ? d : max), weeklyData[0] || { label: '—', count: 0 });
+  const maxWeeklyCount = weeklyData.reduce((max, d) => Math.max(max, d.count), 0);
 
   // Rating distribution derived from the doctor's rating
   const rating = doctor?.rating ?? 0;
@@ -105,9 +140,10 @@ export default function DoctorDashboard() {
     );
   };
 
-  // Star distribution for the review panel
+  // Star distribution for the review panel — computed from actual reviews
   const starDistribution = [5, 4, 3, 2, 1].map((star) => {
-    const pct = star === 5 ? 60 : star === 4 ? 25 : star === 3 ? 10 : star === 2 ? 3 : 2;
+    const count = reviews.filter((rv) => Math.round(rv.rating) === star).length;
+    const pct = reviews.length > 0 ? Math.round((count / reviews.length) * 100) : 0;
     return { star, pct };
   });
 
@@ -193,7 +229,7 @@ export default function DoctorDashboard() {
           </p>
         </div>
 
-        {/* Daily Volume */}
+        {/* Weekly Patient Volume (7-column bar graph) */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="w-9 h-9 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center">
@@ -201,22 +237,45 @@ export default function DoctorDashboard() {
             </div>
             <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 tracking-wide">WEEKLY</span>
           </div>
-          <p className="text-2xl font-bold text-slate-900 dark:text-white">{DAILY_VOLUME[3]}</p>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white">{weeklyTotal}</p>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-            <span className="text-cyan-600 dark:text-cyan-400 font-medium">Week's peak</span> • {DAILY_VOLUME.reduce((a, b) => a + b, 0)} total
+            <span className="text-cyan-600 dark:text-cyan-400 font-medium">Patients this week</span>{' '}
+            • <span className="text-slate-600 dark:text-slate-300 font-medium">{peakDay.label}</span> peak (
+            {peakDay.count})
           </p>
-          <div className="flex items-end gap-1 h-12 mt-3">
-            {DAILY_VOLUME.map((v, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+          <div className="flex items-end gap-1 h-16 mt-3">
+            {weeklyData.map((d) => {
+              const height = maxWeeklyCount > 0 ? (d.count / maxWeeklyCount) * 100 : 0;
+              const isPeak = maxWeeklyCount > 0 && d.count === maxWeeklyCount;
+              return (
                 <div
-                  className={`w-full rounded-t ${i === 3 ? 'bg-[#00b8e6]' : 'bg-slate-100 dark:bg-slate-800'}`}
-                  style={{ height: `${v}%` }}
-                />
-                <span className={`text-[9px] font-medium ${i === 3 ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                  {DAY_LABELS[i]}
-                </span>
-              </div>
-            ))}
+                  key={d.date}
+                  className={`flex-1 flex flex-col items-center justify-end h-full ${isPeak ? '' : 'opacity-100'}`}
+                >
+                  <div
+                    className={`w-full rounded-t transition-all duration-500 ${isPeak ? 'bg-[#00b8e6]' : d.isToday ? 'bg-slate-300 dark:bg-slate-600' : 'bg-slate-100 dark:bg-slate-800'}`}
+                    style={{ height: `${height}%` }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-end gap-1 mt-1.5">
+            {weeklyData.map((d) => {
+              const isPeak = maxWeeklyCount > 0 && d.count === maxWeeklyCount;
+              return (
+                <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5">
+                  {d.count > 0 && (
+                    <span className={`text-[9px] font-semibold leading-none ${isPeak ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {d.count}
+                    </span>
+                  )}
+                  <span className={`text-[9px] font-medium leading-none ${isPeak ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                    {d.label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -299,38 +358,52 @@ export default function DoctorDashboard() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {/* Star distribution bars */}
-              <div className="space-y-1.5 mb-3">
-                {starDistribution.map(({ star, pct }) => (
-                  <div key={star} className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400 w-3">{star}</span>
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" strokeWidth={1.5} />
-                    <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="text-xs text-slate-400 dark:text-slate-500 w-6 text-right">{pct}%</span>
+              {reviews.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <MessageSquare className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" strokeWidth={1.5} />
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No reviews yet.</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Reviews from patients will appear here.</p>
                   </div>
-                ))}
-              </div>
-
-              <div className="border-t border-slate-100 dark:border-slate-800 pt-3" />
-
-              {/* Recent reviews */}
-              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-wide uppercase">Recent Reviews</p>
-              {RECENT_REVIEWS.map((rv) => (
-                <div key={rv.id} className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-3 border border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{rv.patient}</p>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">{rv.time}</span>
-                  </div>
-                  <div className="flex items-center gap-1 mb-1.5">
-                    {Array.from({ length: rv.rating }, (_, i) => (
-                      <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" strokeWidth={1.5} />
+                </div>
+              ) : (
+                <>
+                  {/* Star distribution bars */}
+                  <div className="space-y-1.5 mb-3">
+                    {starDistribution.map(({ star, pct }) => (
+                      <div key={star} className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 w-3">{star}</span>
+                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" strokeWidth={1.5} />
+                        <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs text-slate-400 dark:text-slate-500 w-6 text-right">{pct}%</span>
+                      </div>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{rv.comment}</p>
-                </div>
-              ))}
+
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-3" />
+
+                  {/* Recent reviews */}
+                  <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-wide uppercase">Recent Reviews</p>
+                  {reviews.map((rv) => (
+                    <div key={rv.id} className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-3 border border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{rv.patientName}</p>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500">{formatRelativeTime(rv.createdAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-1 mb-1.5">
+                        {Array.from({ length: Math.round(rv.rating) }, (_, i) => (
+                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" strokeWidth={1.5} />
+                        ))}
+                      </div>
+                      {rv.comment && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{rv.comment}</p>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </div>

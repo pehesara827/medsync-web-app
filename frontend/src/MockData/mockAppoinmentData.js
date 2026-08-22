@@ -108,15 +108,20 @@ export const MOCK_APPOINTMENTS = [
  */
 export const getAppointmentCounts = (appointments = MOCK_APPOINTMENTS) => {
   // Helper: resolve the display status (badgeStatus takes priority, falls back to status)
-  const getDisplayStatus = (a) => a.badgeStatus || a.status;
+  // Normalize to lowercase for case-insensitive comparison
+  const getDisplayStatus = (a) => (a.badgeStatus || a.status || '').toLowerCase();
+  // Only count non-waitlist items for the appointment-based tabs, since
+  // waitlist entries are displayed separately (as cards) only in the Waitlist tab.
+  const nonWaitlist = appointments.filter((a) => !a.isWaitlist);
+  const waitlist = appointments.filter((a) => a.isWaitlist);
   const counts = {
-    All: appointments.length,
-    Upcoming: appointments.filter(
-      (a) => getDisplayStatus(a) === 'Upcoming' || getDisplayStatus(a) === 'Scheduled'
+    All: nonWaitlist.length,
+    Upcoming: nonWaitlist.filter(
+      (a) => getDisplayStatus(a) === 'upcoming' || getDisplayStatus(a) === 'scheduled'
     ).length,
-    Completed: appointments.filter((a) => getDisplayStatus(a) === 'Completed').length,
-    Waitlist: appointments.filter((a) => getDisplayStatus(a) === 'Waitlist').length,
-    Cancelled: appointments.filter((a) => getDisplayStatus(a) === 'Cancelled').length,
+    Completed: nonWaitlist.filter((a) => getDisplayStatus(a) === 'completed').length,
+    Waitlist: waitlist.length,
+    Cancelled: nonWaitlist.filter((a) => getDisplayStatus(a) === 'cancelled').length,
   };
   return counts;
 };

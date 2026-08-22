@@ -19,7 +19,7 @@ if (!dbUrl) {
 const sql = `
 -- 1. Create Waitlist Table
 -- Tracks patients waiting for a doctor's schedule slot when it's at full capacity
-CREATE TABLE IF NOT EXISTS public.waitlist (
+CREATE TABLE IF NOT EXISTS public.appointment_waitlists (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id UUID NOT NULL,
     doctor_id UUID NOT NULL,
@@ -28,26 +28,25 @@ CREATE TABLE IF NOT EXISTS public.waitlist (
     beneficiary_id UUID DEFAULT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'WAITING' 
         CHECK (status IN ('WAITING', 'NOTIFIED', 'CONVERTED', 'EXPIRED', 'SKIPPED', 'CANCELLED')),
-    position INTEGER NOT NULL DEFAULT 1,
     notified_at TIMESTAMPTZ DEFAULT NULL,
-    claim_window_expires_at TIMESTAMPTZ DEFAULT NULL,
+    expires_at TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT waitlist_patient_id_fkey FOREIGN KEY (patient_id) 
+    CONSTRAINT appointment_waitlists_patient_id_fkey FOREIGN KEY (patient_id) 
         REFERENCES public.patient_profiles(id) ON DELETE CASCADE,
-    CONSTRAINT waitlist_doctor_id_fkey FOREIGN KEY (doctor_id) 
+    CONSTRAINT appointment_waitlists_doctor_id_fkey FOREIGN KEY (doctor_id) 
         REFERENCES public.doctor_profiles(id) ON DELETE CASCADE,
-    CONSTRAINT waitlist_schedule_id_fkey FOREIGN KEY (schedule_id) 
+    CONSTRAINT appointment_waitlists_schedule_id_fkey FOREIGN KEY (schedule_id) 
         REFERENCES public.doctor_schedules(id) ON DELETE CASCADE,
-    CONSTRAINT waitlist_beneficiary_id_fkey FOREIGN KEY (beneficiary_id) 
+    CONSTRAINT appointment_waitlists_beneficiary_id_fkey FOREIGN KEY (beneficiary_id) 
         REFERENCES public.beneficiaries(id) ON DELETE SET NULL
 );
 
 -- 2. Indexes for fast FIFO queries and lookups
-CREATE INDEX IF NOT EXISTS idx_waitlist_schedule_status ON public.waitlist(schedule_id, status, created_at);
-CREATE INDEX IF NOT EXISTS idx_waitlist_patient ON public.waitlist(patient_id);
-CREATE INDEX IF NOT EXISTS idx_waitlist_doctor ON public.waitlist(doctor_id);
-CREATE INDEX IF NOT EXISTS idx_waitlist_status_expiry ON public.waitlist(status, claim_window_expires_at);
+CREATE INDEX IF NOT EXISTS idx_appointment_waitlists_schedule_status ON public.appointment_waitlists(schedule_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_appointment_waitlists_patient ON public.appointment_waitlists(patient_id);
+CREATE INDEX IF NOT EXISTS idx_appointment_waitlists_doctor ON public.appointment_waitlists(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_appointment_waitlists_status_expiry ON public.appointment_waitlists(status, expires_at);
 `;
 
 const verifySql = `
@@ -59,7 +58,7 @@ SELECT
     is_nullable
 FROM information_schema.columns
 WHERE table_schema = 'public'
-    AND table_name = 'waitlist'
+    AND table_name = 'appointment_waitlists'
 ORDER BY ordinal_position;
 `;
 
@@ -73,15 +72,15 @@ async function main() {
     await client.connect();
     console.log('Connected to database successfully.');
 
-    console.log('Executing waitlist table creation SQL...');
+    console.log('Executing appointment_waitlists table creation SQL...');
     await client.query(sql);
-    console.log('Waitlist table created successfully!');
+    console.log('Appointment waitlists table created successfully!');
 
-    console.log('\n--- Verifying waitlist table ---');
+    console.log('\n--- Verifying appointment_waitlists table ---');
     const verifyResult = await client.query(verifySql);
 
     if (verifyResult.rows.length === 0) {
-      console.log('❌ Waitlist table not found!');
+      console.log('❌ appointment_waitlists table not found!');
     } else {
       for (const row of verifyResult.rows) {
         console.log(
@@ -96,7 +95,7 @@ async function main() {
       SELECT indexname
       FROM pg_indexes
       WHERE schemaname = 'public' 
-        AND tablename = 'waitlist'
+        AND tablename = 'appointment_waitlists'
       ORDER BY indexname;
     `);
 

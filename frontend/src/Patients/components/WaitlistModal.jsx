@@ -108,7 +108,7 @@ export default function WaitlistModal({ isOpen, onClose, doctor, schedule, patie
               <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 mb-6 text-left space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm text-slate-500 dark:text-slate-400">Your Position</span>
-                  <span className="font-bold text-2xl text-[#00b8e6]">#{waitlistEntry.position}</span>
+                  <span className="font-bold text-2xl text-amber-600 dark:text-amber-400">Waiting</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-slate-500 dark:text-slate-400">Doctor</span>
@@ -123,7 +123,7 @@ export default function WaitlistModal({ isOpen, onClose, doctor, schedule, patie
                   <span className="font-semibold text-amber-600 dark:text-amber-400">Waiting</span>
                 </div>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">You'll receive a notification when a slot opens up. You'll have 30 minutes to confirm.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">You'll receive a notification when a slot opens up. You'll have 2 hours to confirm.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">

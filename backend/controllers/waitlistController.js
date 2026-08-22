@@ -1,4 +1,44 @@
 import * as waitlistModel from '../models/waitlistModel.js';
+import { generateVerificationCode, generateQRPayload } from '../utils/qrUtils.js';
+
+// ─────────────────────────────
+// Helpers
+// ─────────────────────────────
+
+/**
+ * Generates a human-readable display ID from a UUID.
+ * Format: MED-<first 8 chars of UUID uppercased, no dashes>
+ */
+const generateDisplayId = (uuid) => {
+  if (!uuid) return 'MED-UNKNOWN';
+  const shortId = uuid.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return `MED-${shortId}`;
+};
+
+/**
+ * Formats a TIME column (HH:MM:SS) into a 12-hour label.
+ */
+const formatTime = (timeStr) => {
+  if (!timeStr) return '—';
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return timeStr;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+};
+
+/**
+ * Maps a payment_status to the pass badge value.
+ */
+const mapPaymentStatus = (status) => {
+  if (status === 'PAID') return 'PAID';
+  if (status === 'PAY_AT_RECEPTION') return 'PAY_AT_RECEPTION';
+  return 'UNPAID';
+};
+
+// ─────────────────────────────
+// Controllers
+// ─────────────────────────────
 
 /**
  * POST /api/waitlist
@@ -34,6 +74,35 @@ export const joinWaitlist = async (req, res, next) => {
     if (error.code === 'PGRST116') {
       return res.status(404).json({ message: 'Schedule not found.' });
     }
+    next(error);
+  }
+};
+
+/**
+ * GET /api/waitlist/:waitlistId
+ * Returns a single waitlist entry by ID with full related data.
+ */
+export const getWaitlistEntry = async (req, res, next) => {
+  try {
+    const { waitlistId } = req.params;
+
+    if (!waitlistId) {
+      return res.status(400).json({ message: 'Waitlist ID is required.' });
+    }
+
+    let waitlistEntry;
+    try {
+      waitlistEntry = await waitlistModel.getWaitlistEntryById(waitlistId);
+    } catch (err) {
+      if (err.code === 'PGRST116') {
+        return res.status(404).json({ message: 'Waitlist entry not found.' });
+      }
+      throw err;
+    }
+
+    res.json({ waitlist: waitlistEntry });
+  } catch (error) {
+    console.error('Error fetching waitlist entry:', error);
     next(error);
   }
 };
@@ -83,6 +152,7 @@ export const getDoctorWaitlist = async (req, res, next) => {
 /**
  * POST /api/waitlist/:waitlistId/accept
  * Accepts a waitlist offer (patient confirms) and converts to an appointment.
+ * Expects body: { amount?, payment_method? }
  */
 export const acceptOffer = async (req, res, next) => {
   try {
@@ -98,9 +168,47 @@ export const acceptOffer = async (req, res, next) => {
       payment_method,
     });
 
+    // Format the appointment response to match the createAppointment controller shape
+    const appointment = result.appointment;
+    const doctor = appointment.doctor_profiles || {};
+    const schedule = appointment.doctor_schedules || {};
+    const payment = appointment.payments || {};
+    const beneficiary = appointment.beneficiaries || null;
+    const specialtyName = doctor.specialties?.name || doctor.specialization || '—';
+
+    // Determine patient display name
+    let patientName = '';
+    if (appointment.booking_type === 'BENEFICIARY' && beneficiary) {
+      patientName = beneficiary.relationship
+        ? `${beneficiary.full_name} (${beneficiary.relationship})`
+        : beneficiary.full_name;
+    }
+    if (!patientName && appointment.patient_profiles) {
+      const profile = appointment.patient_profiles;
+      patientName = `${profile.first_name} ${profile.last_name}`.trim();
+    }
+
+    const verificationCode = generateVerificationCode(appointment.id);
+    const qrPayload = generateQRPayload(appointment.id);
+
     res.json({
       message: 'Appointment confirmed! Your waitlist offer has been accepted.',
-      appointment: result.appointment,
+      appointment: {
+        appointmentId: appointment.id,
+        displayId: generateDisplayId(appointment.id),
+        verificationCode,
+        patientName: patientName || '—',
+        doctorName: `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim() || '—',
+        specialization: specialtyName,
+        appointmentDate: appointment.appointment_date || '',
+        timeSlot: formatTime(schedule.start_time),
+        paymentStatus: mapPaymentStatus(payment.payment_status),
+        qrPayload,
+        qrDataUrl: appointment.qr_code_url,
+        bookingType: appointment.booking_type,
+        amount: payment.amount,
+        paymentMethod: payment.payment_method,
+      },
       waitlist: result.waitlist,
     });
   } catch (error) {

@@ -20,9 +20,9 @@ const DEFAULT_STATS = [
     iconBg: 'bg-emerald-50',
   },
   {
-    title: 'WAITLIST STATUS',
+    title: 'WAITLIST',
     value: '0',
-    unit: 'Pending',
+    unit: 'Active',
     icon: (
       <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -40,7 +40,7 @@ export default function QuickStats({
   const stats = DEFAULT_STATS.map((stat) => {
     if (stat.title === 'TOTAL SCHEDULED') return { ...stat, value: String(totalScheduled) };
     if (stat.title === 'COMPLETED VISITS') return { ...stat, value: String(completedVisits) };
-    if (stat.title === 'WAITLIST STATUS') return { ...stat, value: String(waitlist) };
+    if (stat.title === 'WAITLIST') return { ...stat, value: String(waitlist) };
     return stat;
   });
 

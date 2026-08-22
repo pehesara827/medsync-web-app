@@ -4,27 +4,25 @@ import { supabase } from '../supabase.js';
  * Creates an in-app notification record.
  *
  * @param {Object} data - Notification data
- * @param {string} data.recipient_user_id - UUID of the auth user who should receive the notification
- * @param {string} data.type - One of: 'WAITLIST_OFFER', 'WAITLIST_JOIN', 'APPOINTMENT_REMINDER', 'SYSTEM'
+ * @param {string} data.user_id - UUID of the auth user who should receive the notification
+ * @param {string} data.type - One of: 'WAITLIST_OFFER', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED', 'SESSION_DELAY', 'PAYMENT_RECEIVED', 'GENERAL'
  * @param {string} data.title - Short title for the notification
  * @param {string} data.message - Full notification message
- * @param {string|undefined} data.schedule_id - Optional schedule reference
- * @param {string|undefined} data.appointment_id - Optional appointment reference
- * @param {string|undefined} data.waitlist_id - Optional waitlist reference
+ * @param {string|undefined} data.action_link - Optional link to navigate to when clicked
+ * @param {Object|undefined} data.metadata - Optional JSON metadata
  * @returns {Promise<Object>} Created notification record
  */
 export const createNotification = async (data) => {
   const {
-    recipient_user_id,
+    user_id,
     type,
     title,
     message,
-    schedule_id,
-    appointment_id,
-    waitlist_id,
+    action_link,
+    metadata,
   } = data;
 
-  if (!recipient_user_id || !type || !title || !message) {
+  if (!user_id || !type || !title || !message) {
     throw new Error('Missing required notification fields');
   }
 
@@ -32,13 +30,12 @@ export const createNotification = async (data) => {
     .from('notifications')
     .insert([
       {
-        recipient_user_id,
+        user_id,
         type,
         title,
         message,
-        schedule_id: schedule_id || null,
-        appointment_id: appointment_id || null,
-        waitlist_id: waitlist_id || null,
+        action_link: action_link || null,
+        metadata: metadata || {},
         is_read: false,
       },
     ])
@@ -98,8 +95,7 @@ export const createNotificationLog = async (data) => {
 };
 
 /**
- * Retrieves all notifications for a given recipient user, newest first.
- * Includes related schedule and waitlist data.
+ * Retrieves all notifications for a given user, newest first.
  *
  * @param {string} userId - UUID of the auth user
  * @param {number} [limit=50] - Max results to return
@@ -108,23 +104,8 @@ export const createNotificationLog = async (data) => {
 export const getNotificationsByRecipient = async (userId, limit = 50) => {
   const { data, error } = await supabase
     .from('notifications')
-    .select(
-      `
-      *,
-      doctor_schedules (
-        id,
-        available_date,
-        start_time,
-        end_time
-      ),
-      waitlist (
-        id,
-        position,
-        status
-      )
-      `
-    )
-    .eq('recipient_user_id', userId)
+    .select('*')
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -142,7 +123,7 @@ export const getUnreadCount = async (userId) => {
   const { count, error } = await supabase
     .from('notifications')
     .select('id', { count: 'exact', head: true })
-    .eq('recipient_user_id', userId)
+    .eq('user_id', userId)
     .eq('is_read', false);
 
   if (error) throw error;
@@ -158,7 +139,7 @@ export const getUnreadCount = async (userId) => {
 export const markNotificationRead = async (notificationId) => {
   const { data, error } = await supabase
     .from('notifications')
-    .update({ is_read: true })
+    .update({ is_read: true, read_at: new Date().toISOString() })
     .eq('id', notificationId)
     .select()
     .single();
@@ -176,8 +157,8 @@ export const markNotificationRead = async (notificationId) => {
 export const markAllNotificationsRead = async (userId) => {
   const { data, error } = await supabase
     .from('notifications')
-    .update({ is_read: true })
-    .eq('recipient_user_id', userId)
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq('user_id', userId)
     .eq('is_read', false)
     .select();
 

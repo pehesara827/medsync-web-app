@@ -7,6 +7,7 @@ import QuickStats from '../components/QuickStats';
 import RecentActivity from '../components/RecentActivity';
 import BookAppointmentModal from '../components/BookAppointmentModal';
 import DoctorProfileModal from '../components/DoctorProfileModal';
+import QRCodeModal from '../components/QRCodeModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function PatientsDashboard() {
@@ -23,6 +24,8 @@ export default function PatientsDashboard() {
   const [favoriteDoctors, setFavoriteDoctors] = useState([]);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
   useEffect(() => {
     const loadAppointments = async () => {
@@ -57,12 +60,27 @@ export default function PatientsDashboard() {
         const data = await response.json();
         setAppointments(data.appointments || []);
         const appts = data.appointments || [];
+        // Fetch the patient's waitlist entries to compute the active waitlist count
+        let waitlistCount = 0;
+        try {
+          const waitlistResponse = await fetch(`${backendUrl}/api/waitlist/patient/${profile.id}`);
+          if (waitlistResponse.ok) {
+            const waitlistData = await waitlistResponse.json();
+            const entries = waitlistData.waitlist || [];
+            waitlistCount = entries.filter(
+              (e) => e.status === 'WAITING' || e.status === 'NOTIFIED'
+            ).length;
+          }
+        } catch (waitlistErr) {
+          console.warn('Failed to load waitlist count:', waitlistErr);
+        }
+
         setStats({
           totalScheduled: appts.filter(
             (a) => a.status === 'PENDING' || a.status === 'CONFIRMED'
           ).length,
           completedVisits: appts.filter((a) => a.status === 'COMPLETED').length,
-          waitlist: appts.filter((a) => a.status === 'WAITLIST').length,
+          waitlist: waitlistCount,
         });
 
         const favoritesResponse = await fetch(`${backendUrl}/api/favorites/patient/${profile.id}`);
@@ -115,7 +133,13 @@ export default function PatientsDashboard() {
                 </div>
               </div>
             ) : (
-              <AppointmentsCarousel appointments={appointments} />
+              <AppointmentsCarousel
+                appointments={appointments}
+                onGetQR={(appointment) => {
+                  setSelectedAppointment(appointment);
+                  setIsQRModalOpen(true);
+                }}
+              />
             )}
           </div>
 
@@ -145,6 +169,15 @@ export default function PatientsDashboard() {
             setSelectedDoctor(null);
           }}
           doctor={selectedDoctor}
+        />
+
+        <QRCodeModal
+          isOpen={isQRModalOpen}
+          onClose={() => {
+            setIsQRModalOpen(false);
+            setSelectedAppointment(null);
+          }}
+          appointment={selectedAppointment}
         />
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Star, MapPin, Clock, Briefcase, Phone } from 'lucide-react';
+import { X, Star, MapPin, Clock, Briefcase, Phone, MessageSquare } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import FavoriteButton from './FavoriteButton';
 
@@ -7,6 +7,11 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
   const [isAnimating, setIsAnimating] = useState(false);
   const [isFavorite, setIsFavorite] = useState(Boolean(doctor?.isFavorite));
   const [isUpdatingFavorite, setIsUpdatingFavorite] = useState(false);
+
+  // Review state (view only)
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState(null);
 
   const handleClose = useCallback(() => {
     setIsAnimating(false);
@@ -32,6 +37,36 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
       document.body.style.overflow = 'unset';
     }
   }, [isOpen]);
+
+  // Fetch reviews when modal opens
+  const fetchReviews = useCallback(async () => {
+    if (!doctor?.id) return;
+    setReviewsLoading(true);
+    setReviewsError(null);
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const response = await fetch(`${backendUrl}/api/reviews/doctor/${doctor.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch reviews');
+      }
+      const data = await response.json();
+      setReviews(data.reviews || []);
+    } catch (err) {
+      console.error('Error fetching reviews:', err);
+      setReviewsError(err.message);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [doctor]);
+
+  useEffect(() => {
+    if (isOpen && doctor?.id) {
+      const timer = setTimeout(() => {
+        fetchReviews();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, doctor, fetchReviews]);
 
   if (!isOpen || !doctor) return null;
 
@@ -89,6 +124,30 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
     } finally {
       setIsUpdatingFavorite(false);
     }
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const renderStars = (value) => {
+    return (
+      <div className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            size={16}
+            className={`${
+              value >= star
+                ? 'fill-amber-400 text-amber-400'
+                : 'fill-slate-200 text-slate-200 dark:fill-slate-700 dark:text-slate-700'
+            }`}
+          />
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -209,6 +268,30 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
             </div>
           </div>
 
+          {/* About the Doctor */}
+          {doctor.description && (
+            <div className="mb-6">
+              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                About the Doctor
+              </p>
+              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                {doctor.description}
+              </p>
+            </div>
+          )}
+
+          {/* Education & Qualifications */}
+          {doctor.education && (
+            <div className="mb-6">
+              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                Education & Qualifications
+              </p>
+              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                {doctor.education}
+              </p>
+            </div>
+          )}
+
           {/* Consultation Modes */}
           {doctor.modes && doctor.modes.length > 0 && (
             <div className="mb-6">
@@ -229,6 +312,83 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
               </div>
             </div>
           )}
+
+          {/* Divider */}
+          <div className="border-t border-slate-200 dark:border-slate-700 my-6"></div>
+
+          {/* Reviews Section (View Only) */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <MessageSquare size={18} className="text-[#00b0d8]" />
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                Reviews & Comments
+              </h3>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                ({reviews.length})
+              </span>
+            </div>
+
+            {/* Reviews List */}
+            {reviewsLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 animate-pulse">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+                      <div className="space-y-2 flex-1">
+                        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/3"></div>
+                        <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded w-1/4"></div>
+                      </div>
+                    </div>
+                    <div className="mt-3 h-2 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+                    <div className="mt-2 h-2 bg-slate-200 dark:bg-slate-700 rounded w-2/3"></div>
+                  </div>
+                ))}
+              </div>
+            ) : reviewsError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                Failed to load reviews. Please try again.
+              </p>
+            ) : reviews.length === 0 ? (
+              <div className="text-center py-8">
+                <MessageSquare size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  No reviews yet.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {reviews.map((review) => (
+                  <div
+                    key={review.id}
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#e6f7fa] dark:bg-slate-700 flex items-center justify-center text-[#00b0d8] font-bold text-sm">
+                        {review.isAnonymous ? 'A' : review.patientName?.charAt(0) || 'A'}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {review.isAnonymous ? 'Anonymous' : review.patientName}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {renderStars(review.rating)}
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {formatDate(review.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {review.comment && (
+                      <p className="mt-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                        {review.comment}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3">

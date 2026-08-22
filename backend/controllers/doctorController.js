@@ -53,6 +53,8 @@ export const getDoctors = async (req, res, next) => {
         rating,
         review_count,
         consultation_fee,
+        description,
+        education,
         specialties (
           id,
           name
@@ -168,18 +170,20 @@ export const getDoctorProfile = async (req, res, next) => {
 };
 
 /**
- * GET /api/doctor/appointments/:doctorId
+ * GET /api/doctor/appointments/:doctorId?date=YYYY-MM-DD
  * Returns all appointments for a doctor, with patient and schedule details.
+ * Optionally filters by a specific date via the `date` query parameter.
  */
 export const getDoctorAppointments = async (req, res, next) => {
   try {
     const { doctorId } = req.params;
+    const { date } = req.query;
 
     if (!doctorId) {
       return res.status(400).json({ message: 'Doctor ID is required.' });
     }
 
-    const { data: appointments, error } = await supabase
+    let query = supabase
       .from('appointments')
       .select(
         `
@@ -228,7 +232,14 @@ export const getDoctorAppointments = async (req, res, next) => {
       `
       )
       .eq('doctor_id', doctorId)
-      .neq('status', 'CANCELLED')
+      .neq('status', 'CANCELLED');
+
+    // Optional date filter (YYYY-MM-DD)
+    if (date) {
+      query = query.eq('appointment_date', date);
+    }
+
+    const { data: appointments, error } = await query
       .order('appointment_date', { ascending: false })
       .order('created_at', { ascending: false });
 
@@ -307,6 +318,122 @@ export const getDoctorAppointments = async (req, res, next) => {
     res.json({ appointments: formatted });
   } catch (error) {
     console.error('Error in getDoctorAppointments:', error);
+    next(error);
+  }
+};
+
+/**
+ * GET /api/doctor/recent-consultations/:doctorId
+ * Returns COMPLETED appointments for a doctor, formatted for the
+ * "Recent Consultations" table on the appointments page.
+ */
+export const getRecentConsultations = async (req, res, next) => {
+  try {
+    const { doctorId } = req.params;
+
+    if (!doctorId) {
+      return res.status(400).json({ message: 'Doctor ID is required.' });
+    }
+
+    const { data: appointments, error } = await supabase
+      .from('appointments')
+      .select(
+        `
+        id,
+        booking_type,
+        beneficiary_id,
+        appointment_date,
+        status,
+        created_at,
+        patient_profiles (
+          id,
+          first_name,
+          last_name
+        ),
+        beneficiaries (
+          id,
+          full_name,
+          relationship
+        ),
+        doctor_schedules (
+          id,
+          start_time
+        )
+      `
+      )
+      .eq('doctor_id', doctorId)
+      .eq('status', 'COMPLETED')
+      .order('appointment_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.error('Error fetching recent consultations:', error);
+      return res.status(500).json({ message: 'Failed to fetch recent consultations' });
+    }
+
+    // Format a date + time into "Oct 5, 14:00" style label
+    const formatDateTime = (dateStr, timeStr) => {
+      if (!dateStr) return '—';
+      const date = new Date(`${dateStr}T00:00:00`);
+      if (Number.isNaN(date.getTime())) return dateStr;
+
+      const dateLabel = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+
+      if (!timeStr) return dateLabel;
+
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      if (Number.isNaN(hours) || Number.isNaN(minutes)) return `${dateLabel}, ${timeStr}`;
+      return `${dateLabel}, ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    };
+
+    // Map appointment status to a display status + tone
+    const mapStatus = (status) => {
+      switch (status) {
+        case 'COMPLETED':
+          return { status: 'Completed', tone: 'cyan' };
+        case 'PENDING':
+          return { status: 'Awaiting Labs', tone: 'amber' };
+        case 'CONFIRMED':
+          return { status: 'Awaiting Labs', tone: 'amber' };
+        default:
+          return { status: status || '—', tone: 'cyan' };
+      }
+    };
+
+    const formatted = (appointments || []).map((appt) => {
+      const patient = appt.patient_profiles || {};
+      const beneficiary = appt.beneficiaries || null;
+      const schedule = appt.doctor_schedules || {};
+
+      // Determine patient display name
+      let patientName = '';
+      if (appt.booking_type === 'BENEFICIARY' && beneficiary) {
+        patientName = beneficiary.relationship
+          ? `${beneficiary.full_name} (${beneficiary.relationship})`
+          : beneficiary.full_name;
+      }
+      if (!patientName) {
+        patientName = `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || '—';
+      }
+
+      const { status, tone } = mapStatus(appt.status);
+
+      return {
+        id: appt.id,
+        date: formatDateTime(appt.appointment_date, schedule.start_time),
+        name: patientName,
+        status,
+        tone,
+      };
+    });
+
+    res.json({ consultations: formatted });
+  } catch (error) {
+    console.error('Error in getRecentConsultations:', error);
     next(error);
   }
 };
@@ -508,6 +635,90 @@ export const getDoctorPatients = async (req, res, next) => {
     res.json({ patients });
   } catch (error) {
     console.error('Error in getDoctorPatients:', error);
+    next(error);
+  }
+};
+
+/**
+ * GET /api/doctor/weekly-stats/:doctorId
+ * Returns per-day patient counts for the current week (Monday-Sunday)
+ * for a given doctor, suitable for a 7-column bar graph.
+ */
+export const getDoctorWeeklyStats = async (req, res, next) => {
+  try {
+    const { doctorId } = req.params;
+
+    if (!doctorId) {
+      return res.status(400).json({ message: 'Doctor ID is required.' });
+    }
+
+    // Compute the current week's Monday-Sunday date range
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Sunday
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() + diffToMonday);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    const startDateStr = weekStart.toISOString().split('T')[0];
+    const endDateStr = weekEnd.toISOString().split('T')[0];
+    const todayStr = now.toISOString().split('T')[0];
+
+    // Fetch only the appointment dates for this doctor within the current week
+    const { data: appointments, error } = await supabase
+      .from('appointments')
+      .select('appointment_date')
+      .eq('doctor_id', doctorId)
+      .neq('status', 'CANCELLED')
+      .gte('appointment_date', startDateStr)
+      .lte('appointment_date', endDateStr);
+
+    if (error) {
+      console.error('Error fetching weekly appointments:', error);
+      return res.status(500).json({ message: 'Failed to fetch weekly stats' });
+    }
+
+    // Count appointments per date
+    const countByDate = {};
+    (appointments || []).forEach((appt) => {
+      const date = appt.appointment_date;
+      countByDate[date] = (countByDate[date] || 0) + 1;
+    });
+
+    // Build the 7-day array (Monday-Sunday)
+    const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const weekly = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      return {
+        date: dateStr,
+        label: dayLabels[i],
+        count: countByDate[dateStr] || 0,
+        isToday: dateStr === todayStr,
+      };
+    });
+
+    const total = weekly.reduce((sum, d) => sum + d.count, 0);
+    const peakDay = weekly.reduce((max, d) => (d.count > max.count ? d : max), weekly[0]);
+
+    res.json({
+      weekStart: startDateStr,
+      weekEnd: endDateStr,
+      total,
+      peakDay: {
+        date: peakDay.date,
+        label: peakDay.label,
+        count: peakDay.count,
+      },
+      weekly,
+    });
+  } catch (error) {
+    console.error('Error in getDoctorWeeklyStats:', error);
     next(error);
   }
 };

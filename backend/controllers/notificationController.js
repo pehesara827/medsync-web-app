@@ -50,15 +50,15 @@ export const getNotifications = async (req, res, next) => {
 /**
  * POST /api/notifications
  * Creates a new notification. Primarily for testing/manual creation.
- * Expects: { recipient_user_id, type, title, message, schedule_id?, appointment_id?, waitlist_id? }
+ * Expects: { user_id, type, title, message, action_link?, metadata? }
  */
 export const createNotification = async (req, res, next) => {
   try {
     const data = req.body;
 
-    if (!data.recipient_user_id || !data.type || !data.title || !data.message) {
+    if (!data.user_id || !data.type || !data.title || !data.message) {
       return res.status(400).json({
-        message: 'Missing required fields: recipient_user_id, type, title, message',
+        message: 'Missing required fields: user_id, type, title, message',
       });
     }
 

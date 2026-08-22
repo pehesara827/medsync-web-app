@@ -1,17 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
-
-// ---- Replace with GET /api/doctor/appointments?date= ----
-const APPOINTMENTS = [
-  { id: 1, time: '08:00', period: 'AM', name: 'Arthur Pendelton', note: 'Routine Follow-up', tone: 'slate', joinable: false },
-  { id: 2, time: '09:30', period: 'AM', name: 'Sarah Jenkins', note: 'Acute Consultation', tone: 'rose', joinable: true },
-];
-
-const RECENT = [
-  { date: 'Oct 5, 14:00', name: 'Marcus Thorne', diagnosis: 'Hypertension Review', status: 'Completed', tone: 'cyan' },
-  { date: 'Oct 5, 11:15', name: 'Elena Rodriguez', diagnosis: 'Thyroid Panel Follow-up', status: 'Awaiting Labs', tone: 'amber' },
-];
-// -----------------------------------------------------------------
+import { supabase } from '../../../supabaseClient';
 
 const STATUS_TONE = {
   cyan: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-300',
@@ -28,10 +17,39 @@ function buildMonthGrid(year, month) {
   return cells;
 }
 
+// Format a time string (HH:MM:SS) into "HH:MM" for display
+const formatTime = (timeStr) => {
+  if (!timeStr) return '—';
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return timeStr;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+// Get AM/PM period from a time string
+const getTimePeriod = (timeStr) => {
+  if (!timeStr) return '';
+  const hours = Number(timeStr.split(':')[0]);
+  return hours >= 12 ? 'PM' : 'AM';
+};
+
+// Derive UI tone from appointment status
+const getTone = (status) => {
+  if (status === 'PENDING' || status === 'CONFIRMED') return 'rose';
+  return 'slate';
+};
+
+// Derive joinable flag from appointment status
+const isJoinable = (status) => status === 'CONFIRMED';
+
 export default function DoctorAppointments() {
   const today = new Date();
   const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth() });
   const [selectedDay, setSelectedDay] = useState(today.getDate());
+
+  const [appointments, setAppointments] = useState([]);
+  const [consultations, setConsultations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const cells = useMemo(() => buildMonthGrid(cursor.year, cursor.month), [cursor]);
   const monthLabel = new Date(cursor.year, cursor.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -40,6 +58,62 @@ export default function DoctorAppointments() {
     const d = new Date(cursor.year, cursor.month + delta, 1);
     setCursor({ year: d.getFullYear(), month: d.getMonth() });
   };
+
+  // Build the selected date as YYYY-MM-DD
+  const selectedDate = useMemo(() => {
+    return `${cursor.year}-${String(cursor.month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+  }, [cursor, selectedDay]);
+
+  // Load data when the selected date changes
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData?.session?.user;
+        if (!user) {
+          setError('You must be logged in to view appointments.');
+          return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+        // Get doctor profile to get doctor_id
+        const profileResponse = await fetch(`${backendUrl}/doctor/profile/${user.id}`);
+        if (!profileResponse.ok) {
+          const errData = await profileResponse.json().catch(() => ({}));
+          throw new Error(errData.message || `Failed to load doctor profile (${profileResponse.status})`);
+        }
+        const profileData = await profileResponse.json();
+
+        // Fetch appointments for the selected date
+        const apptResponse = await fetch(`${backendUrl}/doctor/appointments/${profileData.doctor.id}?date=${selectedDate}`);
+        if (!apptResponse.ok) {
+          const errData = await apptResponse.json().catch(() => ({}));
+          throw new Error(errData.message || `Failed to load appointments (${apptResponse.status})`);
+        }
+        const apptData = await apptResponse.json();
+        setAppointments(apptData.appointments || []);
+
+        // Fetch recent consultations
+        const consultResponse = await fetch(`${backendUrl}/doctor/recent-consultations/${profileData.doctor.id}`);
+        if (!consultResponse.ok) {
+          const errData = await consultResponse.json().catch(() => ({}));
+          throw new Error(errData.message || `Failed to load consultations (${consultResponse.status})`);
+        }
+        const consultData = await consultResponse.json();
+        setConsultations(consultData.consultations || []);
+      } catch (err) {
+        setError(`Failed to load appointments: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [selectedDate]);
 
   return (
     <div className="space-y-6">
@@ -56,6 +130,12 @@ export default function DoctorAppointments() {
           <Filter className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" />
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 dark:border-red-600 bg-red-50 dark:bg-red-950 px-5 py-4 text-sm text-red-700 dark:text-red-200">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
@@ -93,66 +173,89 @@ export default function DoctorAppointments() {
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Appointments for {monthLabel.split(' ')[0]} {selectedDay}</p>
-            <span className="text-xs font-medium bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-300 px-2.5 py-1 rounded-full">{APPOINTMENTS.length} Scheduled</span>
+            <span className="text-xs font-medium bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-300 px-2.5 py-1 rounded-full">{appointments.length} Scheduled</span>
           </div>
 
-          <div className="space-y-3">
-            {APPOINTMENTS.map((a) => (
-              <div
-                key={a.id}
-                className={`flex items-center justify-between rounded-lg p-3 border ${
-                  a.tone === 'rose' ? 'border-cyan-200 bg-cyan-50/40 dark:border-cyan-800 dark:bg-cyan-950/20' : 'border-slate-100 dark:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 w-14">
-                    {a.time}<br /><span className="font-normal text-slate-400 dark:text-slate-500">{a.period}</span>
-                  </div>
-                  <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-600" />
-                  <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{a.name}</p>
-                    <p className={`text-xs flex items-center gap-1 ${a.tone === 'rose' ? 'text-rose-500 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${a.tone === 'rose' ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-500'}`} />
-                      {a.note}
-                    </p>
-                  </div>
-                </div>
-                {a.joinable && (
-                  <button className="px-3 py-1.5 text-xs font-medium rounded-lg bg-cyan-500 text-white hover:bg-cyan-600">
-                    Join Session
-                  </button>
-                )}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-3">
+                <svg className="h-8 w-8 animate-spin text-[#00a8cc]" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Loading appointments...</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : appointments.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <p className="text-sm text-slate-400 dark:text-slate-500">No appointments scheduled for this date.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {appointments.map((a) => {
+                const tone = getTone(a.status);
+                const joinable = isJoinable(a.status);
+                return (
+                  <div
+                    key={a.id}
+                    className={`flex items-center justify-between rounded-lg p-3 border ${
+                      tone === 'rose' ? 'border-cyan-200 bg-cyan-50/40 dark:border-cyan-800 dark:bg-cyan-950/20' : 'border-slate-100 dark:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 w-14">
+                        {formatTime(a.startTime)}<br /><span className="font-normal text-slate-400 dark:text-slate-500">{getTimePeriod(a.startTime)}</span>
+                      </div>
+                      <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-600" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{a.patientName}</p>
+                        <p className={`text-xs flex items-center gap-1 ${tone === 'rose' ? 'text-rose-500 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${tone === 'rose' ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-500'}`} />
+                          {a.status}
+                        </p>
+                      </div>
+                    </div>
+                    {joinable && (
+                      <button className="px-3 py-1.5 text-xs font-medium rounded-lg bg-cyan-500 text-white hover:bg-cyan-600">
+                        Join Session
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Recent Consultations</p>
-          <button className="text-xs font-medium text-cyan-600 dark:text-cyan-400">View All →</button>
-        </div>
+        <p className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-4">Recent Consultations</p>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[11px] text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
               <th className="py-2 font-medium">Date / Time</th>
               <th className="py-2 font-medium">Patient Name</th>
-              <th className="py-2 font-medium">Diagnosis / Topic</th>
               <th className="py-2 font-medium text-right">Status</th>
             </tr>
           </thead>
           <tbody>
-            {RECENT.map((r, i) => (
-              <tr key={i} className="border-b border-slate-50 dark:border-slate-700/50 last:border-0">
-                <td className="py-3 text-slate-500 dark:text-slate-400">{r.date}</td>
-                <td className="py-3 font-medium text-slate-900 dark:text-slate-100">{r.name}</td>
-                <td className="py-3 text-slate-600 dark:text-slate-400">{r.diagnosis}</td>
-                <td className="py-3 text-right">
-                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_TONE[r.tone]}`}>{r.status}</span>
+            {consultations.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">
+                  No completed consultations yet.
                 </td>
               </tr>
-            ))}
+            ) : (
+              consultations.map((r) => (
+                <tr key={r.id} className="border-b border-slate-50 dark:border-slate-700/50 last:border-0">
+                  <td className="py-3 text-slate-500 dark:text-slate-400">{r.date}</td>
+                  <td className="py-3 font-medium text-slate-900 dark:text-slate-100">{r.name}</td>
+                  <td className="py-3 text-right">
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_TONE[r.tone]}`}>{r.status}</span>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

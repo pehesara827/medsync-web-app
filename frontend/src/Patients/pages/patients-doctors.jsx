@@ -39,6 +39,8 @@ export default function PatientsDoctors() {
         modes: ['Telehealth', 'In-Person'],
         consultationFee: doc.consultationFee ?? 0,
         experience: doc.experience ?? doc.experience_years ?? 0,
+        description: doc.description || '',
+        education: doc.education || '',
       }));
 
       setDoctors(mappedDoctors);

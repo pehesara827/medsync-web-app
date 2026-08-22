@@ -5,6 +5,7 @@ import { MOCK_APPOINTMENTS } from '../../MockData/mockAppoinmentData';
 export default function AppointmentsCarousel({
   appointments = MOCK_APPOINTMENTS,
   viewMode = 'grid', // 'grid' (horizontal carousel) or 'list' (vertical responsive grid)
+  onGetQR,
 }) {
   const scrollContainerRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
@@ -55,7 +56,7 @@ export default function AppointmentsCarousel({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 select-none">
           {sortedAppointments.map((item) => (
             <div key={item.id}>
-              <AppointmentCard appointment={item} />
+              <AppointmentCard appointment={item} onGetQR={onGetQR} />
             </div>
           ))}
         </div>
@@ -80,7 +81,7 @@ export default function AppointmentsCarousel({
             className="flex-shrink-0 w-full sm:w-96 md:w-[520px] max-w-[90vw] md:max-w-[85vw]"
             style={{ scrollSnapAlign: 'start' }}
           >
-            <AppointmentCard appointment={item} />
+            <AppointmentCard appointment={item} onGetQR={onGetQR} />
           </div>
         ))}
       </div>

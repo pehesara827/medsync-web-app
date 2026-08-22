@@ -111,30 +111,30 @@ const policies = [
     withCheck: `appointment_id IN (SELECT id FROM public.appointments WHERE patient_id = ${PATIENT_ID})`,
   },
 
-  // ── waitlist ──────────────────────────────────────────────────────
+  // ── appointment_waitlists ────────────────────────────────────────
   {
-    table: 'waitlist',
+    table: 'appointment_waitlists',
     name: 'waitlist_select_own',
     cmd: 'SELECT',
     using: `patient_id = ${PATIENT_ID}`,
     withCheck: null,
   },
   {
-    table: 'waitlist',
+    table: 'appointment_waitlists',
     name: 'waitlist_insert_own',
     cmd: 'INSERT',
     using: null,
     withCheck: `patient_id = ${PATIENT_ID}`,
   },
   {
-    table: 'waitlist',
+    table: 'appointment_waitlists',
     name: 'waitlist_select_doctor',
     cmd: 'SELECT',
     using: `doctor_id IN (SELECT id FROM public.doctor_profiles WHERE user_id = auth.uid())`,
     withCheck: null,
   },
   {
-    table: 'waitlist',
+    table: 'appointment_waitlists',
     name: 'waitlist_update_doctor',
     cmd: 'UPDATE',
     using: `doctor_id IN (SELECT id FROM public.doctor_profiles WHERE user_id = auth.uid())`,
@@ -146,15 +146,15 @@ const policies = [
     table: 'notifications',
     name: 'notifications_select_own',
     cmd: 'SELECT',
-    using: `recipient_user_id = auth.uid()`,
+    using: `user_id = auth.uid()`,
     withCheck: null,
   },
   {
     table: 'notifications',
     name: 'notifications_update_own',
     cmd: 'UPDATE',
-    using: `recipient_user_id = auth.uid()`,
-    withCheck: `recipient_user_id = auth.uid()`,
+    using: `user_id = auth.uid()`,
+    withCheck: `user_id = auth.uid()`,
   },
   {
     table: 'notifications',
@@ -169,7 +169,7 @@ const policies = [
     table: 'notification_log',
     name: 'notification_log_select_own',
     cmd: 'SELECT',
-    using: `notification_id IN (SELECT id FROM public.notifications WHERE recipient_user_id = auth.uid())`,
+    using: `notification_id IN (SELECT id FROM public.notifications WHERE user_id = auth.uid())`,
     withCheck: null,
   },
   {
@@ -178,6 +178,36 @@ const policies = [
     cmd: 'INSERT',
     using: null,
     withCheck: `true`,
+  },
+
+  // ── doctor_reviews ────────────────────────────────────────────────
+  {
+    table: 'doctor_reviews',
+    name: 'doctor_reviews_select_all',
+    cmd: 'SELECT',
+    using: `true`,
+    withCheck: null,
+  },
+  {
+    table: 'doctor_reviews',
+    name: 'doctor_reviews_insert_own',
+    cmd: 'INSERT',
+    using: null,
+    withCheck: `patient_id = ${PATIENT_ID}`,
+  },
+  {
+    table: 'doctor_reviews',
+    name: 'doctor_reviews_update_own',
+    cmd: 'UPDATE',
+    using: `patient_id = ${PATIENT_ID}`,
+    withCheck: `patient_id = ${PATIENT_ID}`,
+  },
+  {
+    table: 'doctor_reviews',
+    name: 'doctor_reviews_delete_own',
+    cmd: 'DELETE',
+    using: `patient_id = ${PATIENT_ID}`,
+    withCheck: null,
   },
 ];
 
@@ -216,7 +246,8 @@ async function main() {
       WHERE schemaname = 'public'
         AND tablename IN (
           'specialties', 'patient_profiles', 'beneficiaries', 'doctor_profiles',
-          'doctor_schedules', 'appointments', 'payments', 'waitlist'
+          'doctor_schedules', 'appointments', 'payments', 'appointment_waitlists',
+          'doctor_reviews'
         )
       ORDER BY tablename, policyname;
     `);

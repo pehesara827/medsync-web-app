@@ -1,15 +1,18 @@
 import { useLocation } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { supabase } from '../../../supabaseClient';
 import Settings from './Settings';
+import NotificationPanel from './NotificationPanel';
 
 // Map route paths to your desired dynamic titles
 const PAGE_TITLES = {
-  
-  
+
+
   '/queue': 'Queue Management',
   '/patient': 'Welcome, Uditha',
   '/patient/appointments' : 'Manage Your Appointments Here',
+  '/patient/doctors': 'Your Doctors Here',
   '/schedule': 'Schedule Manager',
   '/staff': 'Staff Management',
   '/analytics': 'Analytics',
@@ -24,6 +27,93 @@ export default function Header({ onMenuClick }) {
   const settingsRef = useRef(null);
   const settingsButtonRef = useRef(null);
   const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 });
+
+  // Notification panel + live unread-count badge
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+
+  // ── Resolve the current user id from Supabase auth ──────────────────────
+  useEffect(() => {
+    const resolveUser = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (user?.id) {
+        setUserId(user.id);
+      }
+    };
+    resolveUser();
+  }, []);
+
+  // ── Fetch the initial unread notification count ─────────────────────────
+  useEffect(() => {
+    if (!userId) return;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await fetch(`${backendUrl}/api/notifications/unread-count/${userId}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        setUnreadCount(data.count || 0);
+      } catch (err) {
+        console.error('Failed to fetch unread notification count:', err);
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Poll every 30 seconds as a fallback in case realtime isn't enabled
+    const pollInterval = setInterval(fetchUnreadCount, 30 * 1000);
+    return () => clearInterval(pollInterval);
+  }, [userId, backendUrl]);
+
+  // ── Real-time badge updates (always active while a user is logged in) ──
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`header:notifications:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const { event, new: newRow, old: oldRow } = payload;
+
+          setUnreadCount((prev) => {
+            if (event === 'INSERT') {
+              return !newRow?.is_read ? prev + 1 : prev;
+            }
+            if (event === 'UPDATE') {
+              if (oldRow?.is_read === false && newRow?.is_read === true) {
+                return Math.max(0, prev - 1);
+              }
+              if (oldRow?.is_read === true && newRow?.is_read === false) {
+                return prev + 1;
+              }
+              return prev;
+            }
+            if (event === 'DELETE') {
+              return oldRow?.is_read === false ? Math.max(0, prev - 1) : prev;
+            }
+            return prev;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
 
   // Close the settings panel when clicking outside of it or the settings button
   useEffect(() => {
@@ -67,7 +157,7 @@ export default function Header({ onMenuClick }) {
 
   return (
     <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200/80 dark:border-slate-700/80 px-4 md:px-8 py-2.5 md:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 select-none sticky top-0 z-10">
-      
+
       {/* Left: Hamburger + Title */}
       <div className="flex items-center gap-3">
         {/* Mobile Hamburger Button */}
@@ -98,7 +188,7 @@ export default function Header({ onMenuClick }) {
 
       {/* Right Controls: Search, Notifications, Settings & User Avatar - Responsive */}
       <div className="flex items-center gap-3 md:gap-6 w-full md:w-auto">
-        
+
         {/* Search Bar - Full width on mobile, fixed on desktop */}
         <div className="relative flex items-center flex-1 md:flex-none">
           <svg
@@ -121,10 +211,11 @@ export default function Header({ onMenuClick }) {
           />
         </div>
 
-        {/* Notification Icon with Active Indicator Dot */}
+        {/* Notification Icon */}
         <button
           type="button"
           aria-label="Notifications"
+          onClick={() => setIsNotificationOpen(true)}
           className="relative p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
         >
           <svg
@@ -140,8 +231,15 @@ export default function Header({ onMenuClick }) {
               d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
             />
           </svg>
-          {/* Active Blue Dot Badge */}
-          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-[#00a8cc] rounded-full ring-1 md:ring-2 ring-white" />
+          {/* Unread count badge (live via realtime) */}
+          {unreadCount > 0 && (
+            <span
+              className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-4.5 px-1 text-[10px] font-bold text-white bg-[#00b8e6] rounded-full ring-2 ring-white dark:ring-slate-800"
+              aria-label={`${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`}
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </button>
 
         {/* Settings Icon - Hidden on very small screens */}
@@ -196,6 +294,13 @@ export default function Header({ onMenuClick }) {
           </div>,
           document.body
         )}
+
+      {/* Notification Slide-out Side Panel */}
+      <NotificationPanel
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        userId={userId}
+      />
     </header>
   );
 }

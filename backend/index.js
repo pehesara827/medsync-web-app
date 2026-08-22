@@ -21,6 +21,8 @@ import doctorRoutes from './routes/doctorRoutes.js';
 import favoriteRoutes from './routes/favoriteRoutes.js';
 import waitlistRoutes from './routes/waitlistRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
+import { expireExpiredOffers } from './models/waitlistModel.js';
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -32,6 +34,7 @@ app.use('/api/doctor', doctorRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 app.use('/api/patient/profile', userProfileRoutes);
 
@@ -79,7 +82,29 @@ app.use((err, req, res, next) => {
   res.status(status).json({ message });
 });
 
+// ── Waitlist Offer Expiry Scheduler ─────────────────────────────────────
+// Runs every 5 minutes. Any NOTIFIED waitlist offer whose 2-hour claim
+// window has lapsed is automatically expired and cascaded to the next
+// patient in the FIFO queue.
+const WAITLIST_EXPIRY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+const runWaitlistExpiry = async () => {
+  try {
+    const expiredCount = await expireExpiredOffers();
+    if (expiredCount > 0) {
+      console.log(`[Scheduler] Expired ${expiredCount} waitlist offer(s).`);
+    }
+  } catch (error) {
+    console.error('[Scheduler] Error running waitlist expiry:', error.message);
+  }
+};
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  // Run once shortly after startup, then on the interval
+  setTimeout(runWaitlistExpiry, 10 * 1000);
+  setInterval(runWaitlistExpiry, WAITLIST_EXPIRY_INTERVAL_MS);
+  console.log(`[Scheduler] Waitlist expiry job scheduled every ${WAITLIST_EXPIRY_INTERVAL_MS / 60000} minutes.`);
 });

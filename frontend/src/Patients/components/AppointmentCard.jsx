@@ -1,9 +1,11 @@
 
 // Mock Data List
 
-export default function AppointmentCard({ appointment}) {
+export default function AppointmentCard({ appointment, onGetQR }) {
   const handleGetQR = () => {
-    alert(`Generating QR Code for Appointment #${appointment.id}`);
+    if (onGetQR) {
+      onGetQR(appointment);
+    }
   };
 
   return (

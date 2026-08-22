@@ -28,6 +28,10 @@ export default function AppointmentFilterBar({
     { name: 'Cancelled', count: counts.Cancelled },
   ];
 
+  // Determine whether the "Add New Appointment" button should be visible.
+  // It is hidden for Completed and Cancelled tabs.
+  const isAddButtonVisible = activeTab !== 'Completed' && activeTab !== 'Cancelled';
+
   const handleTabClick = (tabName) => {
     setActiveTab(tabName);
     if (onFilterChange) onFilterChange(tabName);
@@ -69,13 +73,15 @@ export default function AppointmentFilterBar({
           })}
         </div>
 
-        {/* Add New Appointment Button */}
-        <div className="flex-shrink-0">
-          <BookNewAppointmentButton
-            children="Add New Appointment"
-            onClick={handleAddNewClick}
-          />
-        </div>
+        {/* Add New Appointment Button — only for non-Completed / non-Cancelled tabs */}
+        {isAddButtonVisible && (
+          <div className="flex-shrink-0">
+            <BookNewAppointmentButton
+              children="Add New Appointment"
+              onClick={handleAddNewClick}
+            />
+          </div>
+        )}
       </div>
 
       {/* Booking Modal */}

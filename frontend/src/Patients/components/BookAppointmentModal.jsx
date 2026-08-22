@@ -12,16 +12,24 @@ export default function BookAppointmentModal({
   initialDate = '',
   editingAppointment = null,
   onUpdated = null,
+  waitlistOffer = null,
 }) {
   const isEditMode = Boolean(editingAppointment);
+  const isClaimMode = Boolean(waitlistOffer);
+
   // ── Form state ─────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(1);
   const [bookingType, setBookingType] = useState(
-    isEditMode && editingAppointment?.bookingType === 'BENEFICIARY' ? 'beneficiary' : 'self'
+    isClaimMode
+      ? (waitlistOffer?.booking_type === 'BENEFICIARY' ? 'beneficiary' : 'self')
+      : (isEditMode && editingAppointment?.bookingType === 'BENEFICIARY' ? 'beneficiary' : 'self')
   );
   const [selectedBeneficiary, setSelectedBeneficiary] = useState(
-    isEditMode ? editingAppointment?.beneficiaryId || '' : ''
+    isClaimMode
+      ? (waitlistOffer?.beneficiary_id || '')
+      : (isEditMode ? editingAppointment?.beneficiaryId || '' : '')
   );
+
   const [showNewBeneficiaryForm, setShowNewBeneficiaryForm] = useState(false);
   const [newBeneficiary, setNewBeneficiary] = useState({
     fullName: '',
@@ -32,7 +40,9 @@ export default function BookAppointmentModal({
   const [specialization, setSpecialization] = useState('');
   const [doctor, setDoctor] = useState('');
   const [appointmentDate, setAppointmentDate] = useState(
-    isEditMode ? editingAppointment?.rawDate || initialDate : initialDate
+    isClaimMode
+      ? (waitlistOffer?.doctor_schedules?.available_date || initialDate)
+      : (isEditMode ? editingAppointment?.rawDate || initialDate : initialDate)
   );
   const [timeSlot, setTimeSlot] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('online');
@@ -157,6 +167,11 @@ export default function BookAppointmentModal({
         if (isEditMode && editingAppointment?.specialtyId) {
           setSpecialization(editingAppointment.specialtyId);
         }
+
+        // In claim mode, pre-fill the specialization from the waitlist offer
+        if (isClaimMode && waitlistOffer?.doctor_profiles?.specialties?.id) {
+          setSpecialization(waitlistOffer.doctor_profiles.specialties.id);
+        }
       } catch (err) {
         setError(`Failed to load specializations: ${err.message}`);
       } finally {
@@ -165,7 +180,7 @@ export default function BookAppointmentModal({
     };
 
     loadSpecializations();
-  }, [isOpen, initialSpecialization, isEditMode, editingAppointment]);
+  }, [isOpen, initialSpecialization, isEditMode, editingAppointment, isClaimMode, waitlistOffer]);
 
   // ── Fetch doctors when specialization changes ──────────────────────
   useEffect(() => {
@@ -197,6 +212,11 @@ export default function BookAppointmentModal({
         if (isEditMode && editingAppointment?.doctorId && docs.some((doc) => doc.id === editingAppointment.doctorId)) {
           setDoctor(editingAppointment.doctorId);
         }
+
+        // In claim mode, pre-fill the doctor from the waitlist offer
+        if (isClaimMode && waitlistOffer?.doctor_id && docs.some((doc) => doc.id === waitlistOffer.doctor_id)) {
+          setDoctor(waitlistOffer.doctor_id);
+        }
       } catch (err) {
         setError(`Failed to load doctors: ${err.message}`);
       } finally {
@@ -205,7 +225,7 @@ export default function BookAppointmentModal({
     };
 
     loadDoctors();
-  }, [specialization, initialDoctorId, isEditMode, editingAppointment]);
+  }, [specialization, initialDoctorId, isEditMode, editingAppointment, isClaimMode, waitlistOffer]);
 
   // ── Fetch available time slots when doctor + date change ───────────
   useEffect(() => {
@@ -233,6 +253,14 @@ export default function BookAppointmentModal({
             setTimeSlot(currentSlot.id);
           }
         }
+
+        // In claim mode, pre-select the schedule from the waitlist offer
+        if (isClaimMode && waitlistOffer?.schedule_id) {
+          const offerSlot = (data || []).find((s) => s.id === waitlistOffer.schedule_id);
+          if (offerSlot) {
+            setTimeSlot(offerSlot.id);
+          }
+        }
       } catch (err) {
         setError(`Failed to load time slots: ${err.message}`);
       } finally {
@@ -241,7 +269,7 @@ export default function BookAppointmentModal({
     };
 
     loadTimeSlots();
-  }, [doctor, appointmentDate, isEditMode, editingAppointment]);
+  }, [doctor, appointmentDate, isEditMode, editingAppointment, isClaimMode, waitlistOffer]);
 
   // ── Helpers ────────────────────────────────────────────────────────
   const formatTime = (timeStr) => {
@@ -447,19 +475,36 @@ export default function BookAppointmentModal({
         receipt_slip_url: slipUrl,
       };
 
-      // 7. Call backend API to create or update appointment
+      // 7. Call backend API to create/update appointment or accept waitlist offer
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-      const url = isEditMode
-        ? `${backendUrl}/api/appointments/${editingAppointment.id}`
-        : `${backendUrl}/api/appointments`;
-      const method = isEditMode ? 'PUT' : 'POST';
+      let url;
+      let method;
+      let requestBody;
+
+      if (isClaimMode) {
+        // Accept the waitlist offer — the backend handles appointment creation
+        url = `${backendUrl}/api/waitlist/${waitlistOffer.id}/accept`;
+        method = 'POST';
+        requestBody = {
+          amount: selectedSchedule.consultation_fee,
+          payment_method: mapPaymentMethod(paymentMethod),
+        };
+      } else if (isEditMode) {
+        url = `${backendUrl}/api/appointments/${editingAppointment.id}`;
+        method = 'PUT';
+        requestBody = bookingData;
+      } else {
+        url = `${backendUrl}/api/appointments`;
+        method = 'POST';
+        requestBody = bookingData;
+      }
 
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(bookingData),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -471,7 +516,7 @@ export default function BookAppointmentModal({
       const appointmentData = result.appointment;
 
       // 8. Update payment status if bank transfer (only for new bookings)
-      if (!isEditMode && paymentMethod === 'bank' && appointmentData.appointmentId) {
+      if (!isEditMode && !isClaimMode && paymentMethod === 'bank' && appointmentData.appointmentId) {
         // Payment status is already set to PENDING_SLIP_VERIFICATION by backend
         console.log('Bank transfer payment pending verification');
       }
@@ -491,14 +536,16 @@ export default function BookAppointmentModal({
         qrDataUrl: appointmentData.qrDataUrl, // Server-generated QR code
       });
 
-      // 10. Notify parent to refresh appointments after edit
-      if (isEditMode && onUpdated) {
+      // 10. Notify parent to refresh appointments after edit or claim
+      if ((isEditMode || isClaimMode) && onUpdated) {
         onUpdated();
       }
 
       setSuccess(
         isEditMode
           ? 'Appointment updated successfully!'
+          : isClaimMode
+          ? 'Appointment confirmed! Your waitlist offer has been accepted.'
           : paymentMethod === 'bank'
           ? 'Appointment booked! Your payment slip has been submitted for verification.'
           : 'Appointment booked successfully!'
@@ -552,6 +599,8 @@ export default function BookAppointmentModal({
             <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100">
               {isEditMode
                 ? 'Edit Appointment'
+                : isClaimMode
+                ? 'Claim Your Slot'
                 : currentStep === 1
                 ? 'Book New Appointment'
                 : isBankTransfer
@@ -1152,7 +1201,7 @@ export default function BookAppointmentModal({
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
-                      {isEditMode ? 'Save Changes' : isBankTransfer ? 'Submit & Book' : isOnlineGateway ? 'Proceed to Pay' : 'Confirm'}
+                      {isEditMode ? 'Save Changes' : isClaimMode ? 'Claim Slot' : isBankTransfer ? 'Submit & Book' : isOnlineGateway ? 'Proceed to Pay' : 'Confirm'}
                     </>
                   )}
                 </button>

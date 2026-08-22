@@ -7,6 +7,7 @@ import {
   declineOffer,
   cancelEntry,
   expireOffers,
+  getWaitlistEntry,
 } from '../controllers/waitlistController.js';
 
 const router = Router();
@@ -22,6 +23,9 @@ router.get('/doctor/:doctorId', getDoctorWaitlist);
 
 // POST /api/waitlist/expire-offers - Manually trigger expiry check
 router.post('/expire-offers', expireOffers);
+
+// GET /api/waitlist/:waitlistId - Get a single waitlist entry by ID (used for claim flow)
+router.get('/:waitlistId', getWaitlistEntry);
 
 // POST /api/waitlist/:waitlistId/accept - Accept a waitlist offer
 router.post('/:waitlistId/accept', acceptOffer);
