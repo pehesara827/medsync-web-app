@@ -9,10 +9,6 @@ const DURATIONS = [
   { id: '60', label: '1 Hour', icon: Hourglass },
 ];
 
-// ---- Replace with GET /api/doctor/session/current ----
-const SESSION = { currentTime: '6:15 PM', scheduledStart: '6:30 PM' };
-// -----------------------------------------------------------------
-
 const formatTime = (timeStr) => {
   if (!timeStr) return '—';
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -39,6 +35,11 @@ export default function DoctorScheduleManager() {
   const [broadcasting, setBroadcasting] = useState(false);
   const [sent, setSent] = useState(false);
 
+  // Session delay state
+  const [session, setSession] = useState(null);
+  const [loadingSession, setLoadingSession] = useState(false);
+  const [sessionError, setSessionError] = useState('');
+
   // Schedule capacity management state
   const [schedules, setSchedules] = useState([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
@@ -46,14 +47,81 @@ export default function DoctorScheduleManager() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleBroadcast = () => {
-    // TODO: POST /api/doctor/session/delay { minutes: selected }
+  // ── Resolve the logged-in doctor's profile id ────────────────────
+  const getDoctorId = async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    if (!user) throw new Error('You must be logged in.');
+
+    const { data: profile, error: profileError } = await supabase
+      .from('doctor_profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (profileError) throw profileError;
+    if (!profile) throw new Error('No doctor profile found for this account.');
+    return profile.id;
+  };
+
+  // ── Fetch the doctor's current active session ────────────────────
+  const loadCurrentSession = async () => {
+    setLoadingSession(true);
+    setSessionError('');
+    try {
+      const doctorId = await getDoctorId();
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const response = await fetch(`${backendUrl}/api/doctor/session/current/${doctorId}`);
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `Failed to load session (${response.status})`);
+      }
+
+      const data = await response.json();
+      setSession(data.session || null);
+    } catch (err) {
+      setSessionError(err.message);
+      setSession(null);
+    } finally {
+      setLoadingSession(false);
+    }
+  };
+
+  // Load the current session when switching to the delay tab
+  useEffect(() => {
+    if (activeTab === 'delay') {
+      (async () => { await loadCurrentSession(); })();
+    }
+  }, [activeTab]);
+
+  // ── Broadcast a live delay for the current session ───────────────
+  const handleBroadcast = async () => {
     setBroadcasting(true);
-    setTimeout(() => {
-      setBroadcasting(false);
+    setSessionError('');
+    try {
+      const doctorId = await getDoctorId();
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const response = await fetch(`${backendUrl}/api/doctor/session/delay/${doctorId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes: parseInt(selected, 10) }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `Failed to broadcast delay (${response.status})`);
+      }
+
+      const data = await response.json();
+      setSession(data.session || null);
       setSent(true);
       setTimeout(() => setSent(false), 2000);
-    }, 800);
+    } catch (err) {
+      setSessionError(err.message);
+    } finally {
+      setBroadcasting(false);
+    }
   };
 
   // ── Fetch doctor's schedule for capacity management ──────────────
@@ -180,40 +248,64 @@ export default function DoctorScheduleManager() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-10 w-full max-w-lg text-center">
             <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Report Current Session Delay</h1>
 
-            <div className="flex items-center justify-center gap-4 mt-4 mb-8 text-sm">
-              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300">
-                <Clock className="w-3.5 h-3.5" /> Current Time: <span className="font-semibold text-slate-900 dark:text-slate-100">{SESSION.currentTime}</span>
-              </span>
-              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300">
-                <CalendarClock className="w-3.5 h-3.5" /> Scheduled Start: <span className="font-semibold text-slate-900 dark:text-slate-100">{SESSION.scheduledStart}</span>
-              </span>
-            </div>
+            {loadingSession ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <RefreshCw className="w-8 h-8 animate-spin text-cyan-500 mx-auto mb-3" />
+                  <p className="text-slate-500 dark:text-slate-300">Loading current session...</p>
+                </div>
+              </div>
+            ) : sessionError ? (
+              <div className="rounded-2xl border border-red-200 dark:border-red-600 bg-red-50 dark:bg-red-950 px-5 py-4 text-sm text-red-700 dark:text-red-200 flex items-start gap-3 text-left mt-6">
+                <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
+                <span>{sessionError}</span>
+              </div>
+            ) : session ? (
+              <>
+                <div className="flex items-center justify-center gap-4 mt-4 mb-8 text-sm">
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300">
+                    <Clock className="w-3.5 h-3.5" /> Current Time: <span className="font-semibold text-slate-900 dark:text-slate-100">{formatTime(session.currentTime)}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300">
+                    <CalendarClock className="w-3.5 h-3.5" /> Scheduled Start: <span className="font-semibold text-slate-900 dark:text-slate-100">{formatTime(session.scheduledStart)}</span>
+                  </span>
+                </div>
 
-            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-wide mb-3">SELECT DELAY DURATION</p>
+                {session.isDelayed && (
+                  <div className="mb-6 rounded-xl border border-amber-200 dark:border-amber-600 bg-amber-50 dark:bg-amber-950 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
+                    Currently reporting a <span className="font-semibold">{session.delayMinutes} min</span> delay.
+                  </div>
+                )}
 
-            <div className="grid grid-cols-4 gap-3 mb-8">
-              {DURATIONS.map(({ id, label, icon: Icon }) => (
+                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-wide mb-3">SELECT DELAY DURATION</p>
+
+                <div className="grid grid-cols-4 gap-3 mb-8">
+                  {DURATIONS.map(({ id, label, icon: Icon }) => (
+                    <button
+                      key={id}
+                      onClick={() => setSelected(id)}
+                      className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 transition-colors ${
+                        selected === id ? 'border-cyan-600 bg-cyan-50/40 dark:bg-cyan-950/30' : 'border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 ${selected === id ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                      <span className={`text-sm font-medium ${selected === id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-600 dark:text-slate-300'}`}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+
                 <button
-                  key={id}
-                  onClick={() => setSelected(id)}
-                  className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 transition-colors ${
-                    selected === id ? 'border-cyan-600 bg-cyan-50/40 dark:bg-cyan-950/30' : 'border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
-                  }`}
+                  onClick={handleBroadcast}
+                  disabled={broadcasting}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-cyan-700 text-white font-medium hover:bg-cyan-800 dark:hover:bg-cyan-600 disabled:opacity-60"
                 >
-                  <Icon className={`w-5 h-5 ${selected === id ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`} />
-                  <span className={`text-sm font-medium ${selected === id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-600 dark:text-slate-300'}`}>{label}</span>
+                  {sent ? 'Delay Broadcast Sent ✓' : broadcasting ? 'Broadcasting…' : 'Broadcast Live Delay'}
+                  {!broadcasting && !sent && <ArrowRight className="w-4 h-4" />}
                 </button>
-              ))}
-            </div>
-
-            <button
-              onClick={handleBroadcast}
-              disabled={broadcasting}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-cyan-700 text-white font-medium hover:bg-cyan-800 dark:hover:bg-cyan-600 disabled:opacity-60"
-            >
-              {sent ? 'Delay Broadcast Sent ✓' : broadcasting ? 'Broadcasting…' : 'Broadcast Live Delay'}
-              {!broadcasting && !sent && <ArrowRight className="w-4 h-4" />}
-            </button>
+              </>
+            ) : (
+              <p className="text-slate-500 dark:text-slate-300 mt-6">No active session right now.</p>
+            )}
           </div>
         </div>
       )}

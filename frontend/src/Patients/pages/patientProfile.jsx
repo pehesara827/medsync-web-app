@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { supabase } from '../../../supabaseClient';
 import { 
   User, 
   Mail, 
@@ -26,14 +27,16 @@ export default function PatientProfile() {
   
   const [newContact, setNewContact] = useState({ name: '', relation: '', phone: '' });
 
-  // Test User ID (Database eke tiyena patient user UUID ekak danna)
- 
-  const USER_ID = "37bf4f53-aedf-414a-be0a-786f6ad19b5a";
-
-  
   const fetchProfile = async () => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/patient/profile/${USER_ID}`);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const response = await axios.get(`http://localhost:5000/api/patient/profile/${user.id}`);
       setProfile(response.data.data);
       setLoading(false);
     } catch (error) {
@@ -54,6 +57,13 @@ export default function PatientProfile() {
   // Save Profile Changes
   const handleSaveProfile = async () => {
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (!user) {
+        alert("You must be logged in to update your profile.");
+        return;
+      }
+
       const nameParts = profile.fullName.split(' ');
       const payload = {
         firstName: nameParts[0] || '',
@@ -65,7 +75,7 @@ export default function PatientProfile() {
         address: profile.address
       };
 
-      await axios.put(`http://localhost:5000/api/patient/profile/${USER_ID}`, payload);
+      await axios.put(`http://localhost:5000/api/patient/profile/${user.id}`, payload);
       alert("Profile updated successfully!");
       setIsEditing(false);
       fetchProfile();
@@ -79,7 +89,14 @@ export default function PatientProfile() {
   const handleAddContactSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`http://localhost:5000/api/patient/profile/${USER_ID}/emergency-contact`, newContact);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (!user) {
+        alert("You must be logged in to add an emergency contact.");
+        return;
+      }
+
+      await axios.post(`http://localhost:5000/api/patient/profile/${user.id}/emergency-contact`, newContact);
       alert("Emergency contact saved!");
       setShowContactModal(false);
       setNewContact({ name: '', relation: '', phone: '' });

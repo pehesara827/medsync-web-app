@@ -28,8 +28,6 @@ import PatientRecords from './Admins/pages/patientRecords';
 import ScheduleDelays from './Admins/pages/scheduleDelays';
 import StaffManagement from './Admins/pages/staffManagement';
 import Payments from './Admins/pages/payments';
-import Settings from './Admins/pages/settings';
-import MedBotConfig from './Admins/pages/medBotConfig';
 
 import DoctorDashboard from './Doctors/pages/doctorsDashboard';
 import DoctorPatients from './Doctors/pages/doctorsPatients';
@@ -59,6 +57,8 @@ export default function App() {
 
         {/* Standalone login page (no navbar) */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+
 
 
         
@@ -72,6 +72,7 @@ export default function App() {
             <Route path="appointments/:appointmentId" element={<AppointmentConfirmationPage />} />
             <Route path="qr-codes" element={<QRCodePage />} />
             <Route path="doctors" element={<PatientsDoctors />} />
+            <Route path="profile" element={<PatientProfile />} />
           </Route>
         </Route>
 
@@ -94,8 +95,6 @@ export default function App() {
           <Route path="schedule-delays" element={<ScheduleDelays />} />
           <Route path="staff-management" element={<StaffManagement />} />
           <Route path="payments" element={<Payments />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="settings/medbot" element={<MedBotConfig />} />
         </Route>
 
         {/* Catch-all route for unknown URLs */}

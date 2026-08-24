@@ -121,6 +121,8 @@ export const getDoctorProfile = async (req, res, next) => {
         rating,
         review_count,
         consultation_fee,
+        description,
+        education,
         specialties (
           id,
           name
@@ -143,6 +145,35 @@ export const getDoctorProfile = async (req, res, next) => {
       return res.status(404).json({ message: 'Doctor profile not found' });
     }
 
+    // Count distinct patients treated (excluding cancelled appointments)
+    let patientsTreated = 0;
+    const { data: appointments, error: apptError } = await supabase
+      .from('appointments')
+      .select('patient_id')
+      .eq('doctor_id', profile.id)
+      .neq('status', 'CANCELLED');
+
+    if (!apptError && appointments) {
+      patientsTreated = new Set(appointments.map((a) => a.patient_id)).size;
+    }
+
+    // Parse education: stored as a comma-separated string or JSON array
+    let education = [];
+    if (Array.isArray(profile.education)) {
+      education = profile.education;
+    } else if (typeof profile.education === 'string' && profile.education.trim()) {
+      education = profile.education
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
+    }
+
+    // Parse bio: split description into paragraphs on newlines
+    const bio = (profile.description || '')
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
     res.json({
       doctor: {
         id: profile.id,
@@ -157,14 +188,158 @@ export const getDoctorProfile = async (req, res, next) => {
         specialtyName: profile.specialties?.name || profile.specialization || '',
         experienceYears: profile.experience_years ?? 0,
         isApproved: profile.is_approved,
+        verified: Boolean(profile.is_approved),
         doctorImage: profile.doctor_image || '',
         rating: profile.rating ?? 0,
         reviewCount: profile.review_count ?? 0,
         consultationFee: profile.consultation_fee ?? 0,
+        patientsTreated,
+        bio,
+        expertise: profile.specialties?.name
+          ? [profile.specialties.name]
+          : profile.specialization
+          ? [profile.specialization]
+          : [],
+        education,
       },
     });
   } catch (error) {
     console.error('Error in getDoctorProfile:', error);
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/doctor/profile/:userId
+ * Updates the doctor profile for a given user_id (the logged-in doctor).
+ */
+export const updateDoctorProfile = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required.' });
+    }
+
+    const {
+      first_name,
+      last_name,
+      specialization,
+      experience_years,
+      doctor_image,
+      description,
+      education,
+      consultation_fee,
+    } = req.body;
+
+    // Build the update object with only provided fields
+    const updates = {};
+    if (first_name !== undefined) updates.first_name = first_name;
+    if (last_name !== undefined) updates.last_name = last_name;
+    if (specialization !== undefined) updates.specialization = specialization;
+    if (experience_years !== undefined) updates.experience_years = experience_years;
+    if (doctor_image !== undefined) updates.doctor_image = doctor_image;
+    if (description !== undefined) updates.description = description;
+    if (education !== undefined) {
+      // Normalize education: array -> comma-separated string for storage
+      updates.education = Array.isArray(education)
+        ? education.map((e) => e.trim()).filter(Boolean).join(', ')
+        : education;
+    }
+    if (consultation_fee !== undefined) updates.consultation_fee = consultation_fee;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: 'No fields provided to update.' });
+    }
+
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from('doctor_profiles')
+      .update(updates)
+      .eq('user_id', userId)
+      .select(
+        `
+        id,
+        user_id,
+        first_name,
+        last_name,
+        medical_license_no,
+        specialization,
+        experience_years,
+        is_approved,
+        doctor_image,
+        rating,
+        review_count,
+        consultation_fee,
+        description,
+        education,
+        specialties (
+          id,
+          name
+        ),
+        users (
+          email,
+          username
+        )
+      `
+      )
+      .maybeSingle();
+
+    if (updateError) {
+      console.error('Error updating doctor profile:', updateError);
+      return res.status(500).json({ message: 'Failed to update doctor profile' });
+    }
+
+    if (!updatedProfile) {
+      return res.status(404).json({ message: 'Doctor profile not found' });
+    }
+
+    // Parse education for the response
+    let educationList = [];
+    if (Array.isArray(updatedProfile.education)) {
+      educationList = updatedProfile.education;
+    } else if (typeof updatedProfile.education === 'string' && updatedProfile.education.trim()) {
+      educationList = updatedProfile.education
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
+    }
+
+    // Parse bio for the response
+    const bio = (updatedProfile.description || '')
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    res.json({
+      doctor: {
+        id: updatedProfile.id,
+        userId: updatedProfile.user_id,
+        firstName: updatedProfile.first_name,
+        lastName: updatedProfile.last_name,
+        fullName: `Dr. ${updatedProfile.first_name} ${updatedProfile.last_name}`.trim(),
+        email: updatedProfile.users?.email || '',
+        username: updatedProfile.users?.username || '',
+        medicalLicenseNo: updatedProfile.medical_license_no,
+        specialization: updatedProfile.specialization,
+        specialtyName: updatedProfile.specialties?.name || updatedProfile.specialization || '',
+        experienceYears: updatedProfile.experience_years ?? 0,
+        isApproved: updatedProfile.is_approved,
+        verified: Boolean(updatedProfile.is_approved),
+        doctorImage: updatedProfile.doctor_image || '',
+        rating: updatedProfile.rating ?? 0,
+        reviewCount: updatedProfile.review_count ?? 0,
+        consultationFee: updatedProfile.consultation_fee ?? 0,
+        bio,
+        expertise: updatedProfile.specialties?.name
+          ? [updatedProfile.specialties.name]
+          : updatedProfile.specialization
+          ? [updatedProfile.specialization]
+          : [],
+        education: educationList,
+      },
+    });
+  } catch (error) {
+    console.error('Error in updateDoctorProfile:', error);
     next(error);
   }
 };
@@ -501,6 +676,146 @@ export const updateScheduleCapacity = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Error in updateScheduleCapacity:', error);
+    next(error);
+  }
+};
+
+/**
+ * GET /api/doctor/session/current/:doctorId
+ * Returns the doctor's current active session (today's schedule slot that
+ * is currently in progress), along with any reported delay info.
+ */
+export const getCurrentSession = async (req, res, next) => {
+  try {
+    const { doctorId } = req.params;
+
+    if (!doctorId) {
+      return res.status(400).json({ message: 'Doctor ID is required.' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const nowTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    // Find today's schedule slot that is currently in progress
+    const { data: schedule, error } = await supabase
+      .from('doctor_schedules')
+      .select('*')
+      .eq('doctor_id', doctorId)
+      .eq('available_date', today)
+      .lte('start_time', nowTime)
+      .gte('end_time', nowTime)
+      .order('start_time', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching current session:', error);
+      return res.status(500).json({ message: 'Failed to fetch current session' });
+    }
+
+    if (!schedule) {
+      return res.status(404).json({ message: 'No active session right now.' });
+    }
+
+    res.json({
+      session: {
+        id: schedule.id,
+        currentTime: nowTime,
+        scheduledStart: schedule.start_time,
+        scheduledEnd: schedule.end_time,
+        delayMinutes: schedule.delay_minutes ?? 0,
+        isDelayed: schedule.is_delayed ?? false,
+        delayReportedAt: schedule.delay_reported_at,
+        consultationFee: schedule.consultation_fee ?? 0,
+        maxPatients: schedule.max_patients ?? 1,
+        currentAppointment: schedule.current_appointment ?? 0,
+      },
+    });
+  } catch (error) {
+    console.error('Error in getCurrentSession:', error);
+    next(error);
+  }
+};
+
+/**
+ * POST /api/doctor/session/delay/:doctorId
+ * Reports a delay for the doctor's current active session.
+ * Body: { minutes }
+ */
+export const reportSessionDelay = async (req, res, next) => {
+  try {
+    const { doctorId } = req.params;
+    const { minutes } = req.body;
+
+    if (!doctorId) {
+      return res.status(400).json({ message: 'Doctor ID is required.' });
+    }
+
+    if (minutes === undefined || minutes === null) {
+      return res.status(400).json({ message: 'minutes is required.' });
+    }
+
+    const delayMinutes = parseInt(minutes, 10);
+    if (Number.isNaN(delayMinutes) || delayMinutes < 0) {
+      return res.status(400).json({ message: 'minutes must be a non-negative integer.' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const nowTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    // Find today's active session
+    const { data: schedule, error: fetchError } = await supabase
+      .from('doctor_schedules')
+      .select('id')
+      .eq('doctor_id', doctorId)
+      .eq('available_date', today)
+      .lte('start_time', nowTime)
+      .gte('end_time', nowTime)
+      .order('start_time', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('Error fetching current session:', fetchError);
+      return res.status(500).json({ message: 'Failed to fetch current session' });
+    }
+
+    if (!schedule) {
+      return res.status(404).json({ message: 'No active session right now.' });
+    }
+
+    // Update the delay fields on the active session
+    const { data: updatedSchedule, error: updateError } = await supabase
+      .from('doctor_schedules')
+      .update({
+        delay_minutes: delayMinutes,
+        is_delayed: delayMinutes > 0,
+        delay_reported_at: delayMinutes > 0 ? new Date().toISOString() : null,
+      })
+      .eq('id', schedule.id)
+      .select('id, delay_minutes, is_delayed, delay_reported_at, start_time, end_time')
+      .single();
+
+    if (updateError) {
+      console.error('Error reporting session delay:', updateError);
+      return res.status(500).json({ message: 'Failed to report session delay.' });
+    }
+
+    res.json({
+      session: {
+        id: updatedSchedule.id,
+        currentTime: nowTime,
+        scheduledStart: updatedSchedule.start_time,
+        scheduledEnd: updatedSchedule.end_time,
+        delayMinutes: updatedSchedule.delay_minutes ?? 0,
+        isDelayed: updatedSchedule.is_delayed ?? false,
+        delayReportedAt: updatedSchedule.delay_reported_at,
+      },
+    });
+  } catch (error) {
+    console.error('Error in reportSessionDelay:', error);
     next(error);
   }
 };
