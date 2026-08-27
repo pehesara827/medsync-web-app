@@ -1,5 +1,7 @@
 import * as waitlistModel from '../models/waitlistModel.js';
 import { generateVerificationCode, generateQRPayload } from '../utils/qrUtils.js';
+import { supabase } from '../config/supabaseClient.js';
+import { createNotification } from '../models/notificationModel.js';
 
 // ─────────────────────────────
 // Helpers
@@ -316,3 +318,173 @@ export const expireOffers = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * GET /api/admin/waitlists/:scheduleId
+ * Returns the FIFO queue of waitlisted patients for a schedule
+ * (ordered by created_at ascending). Joins patient and doctor/schedule details.
+ */
+export const getAdminWaitlistsBySchedule = async (req, res, next) => {
+  try {
+    const { scheduleId } = req.params;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(scheduleId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'scheduleId must be a valid UUID.' });
+    }
+
+    const { data, error } = await supabase
+      .from('appointment_waitlists')
+      .select(
+        `id,
+        patient_id,
+        doctor_id,
+        schedule_id,
+        booking_type,
+        beneficiary_id,
+        status,
+        notified_at,
+        expires_at,
+        created_at,
+        patient_profiles (
+          id,
+          user_id,
+          first_name,
+          last_name,
+          phone_number
+        ),
+        doctor_profiles (
+          id,
+          first_name,
+          last_name
+        ),
+        doctor_schedules (
+          id,
+          available_date,
+          start_time,
+          end_time
+        )`
+      )
+      .eq('schedule_id', scheduleId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    const list = (data || []).map((w) => ({
+      id: w.id,
+      patientId: w.patient_id,
+      scheduleId: w.schedule_id,
+      bookingType: w.booking_type,
+      beneficiaryId: w.beneficiary_id,
+      status: w.status,
+      notifiedAt: w.notified_at,
+      expiresAt: w.expires_at,
+      createdAt: w.created_at,
+      patientName:
+        [w.patient_profiles?.first_name, w.patient_profiles?.last_name]
+          .filter(Boolean)
+          .join(' ') || null,
+      patientUserId: w.patient_profiles?.user_id || null,
+      patientPhone: w.patient_profiles?.phone_number || null,
+      doctorName:
+        [w.doctor_profiles?.first_name, w.doctor_profiles?.last_name]
+          .filter(Boolean)
+          .join(' ') || null,
+      availableDate: w.doctor_schedules?.available_date || null,
+      startTime: w.doctor_schedules?.start_time || null,
+    }));
+
+    res.json({ success: true, data: { waitlist: list } });
+  } catch (error) {
+    console.error('Error in getAdminWaitlistsBySchedule:', error);
+    next(error);
+  }
+};
+
+/**
+ * POST /api/admin/waitlists/:id/manual-notify
+ * Manually notifies a waitlisted patient that a slot has opened:
+ *   - Sets status to NOTIFIED
+ *   - Sets expires_at to now + 30 minutes
+ *   - Sends a WAITLIST_OFFER notification to the patient's user_id
+ */
+export const manualNotify = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'id must be a valid UUID.' });
+    }
+
+    // Fetch the waitlist entry with the patient's user_id and schedule info.
+    const { data: entry, error: fetchError } = await supabase
+      .from('appointment_waitlists')
+      .select(
+        `id,
+        schedule_id,
+        patient_profiles ( user_id, first_name, last_name ),
+        doctor_schedules ( available_date, start_time )`
+      )
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!entry) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Waitlist entry not found.' });
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 30 * 60 * 1000); // +30 minutes
+
+    const { data: updated, error: updateError } = await supabase
+      .from('appointment_waitlists')
+      .update({
+        status: 'NOTIFIED',
+        notified_at: now.toISOString(),
+        expires_at: expiresAt.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+
+    if (updateError) throw updateError;
+
+    const patientUserId = entry.patient_profiles?.user_id;
+
+    if (patientUserId) {
+      try {
+        const schedule = entry.doctor_schedules || {};
+        await createNotification({
+          user_id: patientUserId,
+          type: 'WAITLIST_OFFER',
+          title: 'A slot has opened up!',
+          message: `A slot in your waitlisted schedule (${
+            schedule.available_date || 'your session'
+          }${
+            schedule.start_time ? ` at ${schedule.start_time}` : ''
+          }) is now available. Please confirm within 30 minutes.`,
+          action_link: `/patient/appointments?claim=${id}`,
+          metadata: {
+            schedule_id: entry.schedule_id,
+            waitlist_id: id,
+          },
+        });
+      } catch (notifError) {
+        console.error('[ManualNotify] Notification failed:', notifError.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { waitlist: updated },
+    });
+  } catch (error) {
+    console.error('Error in manualNotify:', error);
+    next(error);
+  }
+};
+

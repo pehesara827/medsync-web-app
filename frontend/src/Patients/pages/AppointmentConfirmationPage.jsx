@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { generateQRPayload, generateVerificationCode } from '../../utils/qrUtils';
 import AppointmentConfirmationPass from '../components/AppointmentConfirmationPass';
 
@@ -162,12 +163,7 @@ export default function AppointmentConfirmationPage() {
 
   // ── Render states ──────────────────────────────────────────────────
   if (loading) {
-    return (
-      <div className="flex-1 w-full flex flex-col items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 animate-spin text-[#00b8e6]" />
-        <p className="mt-3 text-sm font-medium text-slate-500">Loading your appointment pass...</p>
-      </div>
-    );
+    return <LoadingSpinner message="Loading your appointment pass" />;
   }
 
   if (error || !passData) {

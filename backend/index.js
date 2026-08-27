@@ -22,6 +22,8 @@ import favoriteRoutes from './routes/favoriteRoutes.js';
 import waitlistRoutes from './routes/waitlistRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import scheduleRoutes from './routes/scheduleRoutes.js';
 import { expireExpiredOffers } from './models/waitlistModel.js';
 
 // Routes
@@ -35,6 +37,8 @@ app.use('/api/favorites', favoriteRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/schedules', scheduleRoutes);
 
 app.use('/api/patient/profile', userProfileRoutes);
 
@@ -73,9 +77,28 @@ app.use((err, req, res, next) => {
     });
   }
 
-  // Handle body-parser JSON parse errors
+      // Handle body-parser JSON parse errors
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ message: 'Invalid JSON in request body.' });
+  }
+
+  // Map PostgreSQL data/integrity errors to friendly 4xx responses instead of
+  // leaking a raw 500 for bad user input (e.g. invalid dates, NOT NULL,
+  // failed CHECK constraints, value too long for type).
+  const pgCodeStatus = {
+    '22P02': 400, // invalid_text_representation (e.g. bad date/number)
+    '22001': 400, // string_data_right_truncation
+    '22003': 400, // numeric_value_out_of_range
+    '23502': 400, // not_null_violation
+    '23503': 400, // foreign_key_violation
+    '23514': 400, // check_violation
+    '23505': 409, // unique_violation (duplicate)
+    '23507': 400, // foreign_key_no_action (e.g. deleting a referenced row)
+  };
+  if (err && err.code && pgCodeStatus[err.code]) {
+    return res.status(pgCodeStatus[err.code]).json({
+      message: err.details || err.message || 'Invalid data provided.',
+    });
   }
 
   // Default: return JSON error

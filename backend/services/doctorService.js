@@ -1,5 +1,5 @@
 import * as authUserModel from '../models/authUserModel.js';
-import { supabase } from '../supabase.js';
+import * as doctorProfileModel from '../models/doctorProfileModel.js';
 
 /**
  * Register a new doctor user.
@@ -15,7 +15,7 @@ import { supabase } from '../supabase.js';
  * @param {Object} registrationData - The complete registration payload.
  * @returns {Object} - The created user and doctor profile.
  */
-export const registerDoctor = async (registrationData) => {
+export const registerDoctor = async (registrationData, { isApproved = false } = {}) => {
   const {
     // Credentials
     username,
@@ -33,6 +33,9 @@ export const registerDoctor = async (registrationData) => {
     specialty_id,
     experience_years,
     doctor_image,
+    consultation_fee,
+    education,
+    description,
   } = registrationData;
 
   const plainPassword = password || legacyPassword;
@@ -68,25 +71,20 @@ export const registerDoctor = async (registrationData) => {
 
   // 2. Insert into doctor_profiles table
   try {
-    const { data: doctorProfile, error: profileError } = await supabase
-      .from('doctor_profiles')
-      .insert([
-        {
-          user_id: userId,
-          first_name,
-          last_name,
-          medical_license_no,
-          specialization,
-          specialty_id: specialty_id || null,
-          experience_years: experience_years || 0,
-          is_approved: false,
-          doctor_image: doctor_image || null,
-        },
-      ])
-      .select()
-      .single();
-
-    if (profileError) throw profileError;
+    const doctorProfile = await doctorProfileModel.create({
+      user_id: userId,
+      first_name,
+      last_name,
+      medical_license_no,
+      specialization,
+      specialty_id,
+      experience_years,
+      is_approved: isApproved,
+      doctor_image,
+      consultation_fee,
+      education,
+      description,
+    });
 
     return {
       user: { id: userId, username, email, role: 'DOCTOR', terms_accepted },

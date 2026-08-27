@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { supabase } from '../../../supabaseClient';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { 
   User, 
   Mail, 
@@ -107,7 +108,7 @@ export default function PatientProfile() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center font-bold">Loading Patient Profile...</div>;
+  if (loading) return <LoadingSpinner message="Loading your profile" />;
   if (!profile) return <div className="p-8 text-center text-red-500 font-bold">Profile not found.</div>;
 
   return (

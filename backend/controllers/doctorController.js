@@ -1,4 +1,5 @@
 import { supabase } from '../supabase.js';
+import { createNotification } from '../models/notificationModel.js';
 
 /**
  * Fetches the next available schedule row for a doctor.
@@ -1037,3 +1038,244 @@ export const getDoctorWeeklyStats = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * GET /api/admin/doctors/all
+ * Returns ALL doctor profiles (approved + pending) joined with the auth
+ * users(email, is_verified) and specialties(name) so the admin management
+ * table can render email, verification status, and specialty.
+ */
+export const getAdminDoctorsAll = async (req, res, next) => {
+  try {
+    const { data: doctors, error } = await supabase
+      .from('doctor_profiles')
+      .select(
+        `id,
+        user_id,
+        first_name,
+        last_name,
+        medical_license_no,
+        specialization,
+        experience_years,
+        is_approved,
+        doctor_image,
+        rating,
+        review_count,
+        consultation_fee,
+        description,
+        education,
+        specialty_id,
+        specialties ( id, name ),
+        users ( email, is_verified )`
+      )
+      .order('first_name', { ascending: true });
+
+    if (error) throw error;
+
+    const list = (doctors || []).map((d) => ({
+      id: d.id,
+      userId: d.user_id,
+      firstName: d.first_name,
+      lastName: d.last_name,
+      fullName:
+        [d.first_name, d.last_name].filter(Boolean).join(' ') || null,
+      email: d.users?.email || null,
+      isVerified: Boolean(d.users?.is_verified),
+      medicalLicenseNo: d.medical_license_no,
+      specialization: d.specialization,
+      specialtyId: d.specialty_id,
+      specialty: d.specialties?.name || null,
+      experienceYears: d.experience_years ?? 0,
+      isApproved: d.is_approved ?? false,
+      doctorImage: d.doctor_image,
+      rating: Number(d.rating ?? 0),
+      reviewCount: d.review_count ?? 0,
+      consultationFee: Number(d.consultation_fee ?? 0),
+      description: d.description,
+      education: d.education,
+    }));
+
+    res.json({ success: true, data: { doctors: list } });
+  } catch (error) {
+    console.error('Error in getAdminDoctorsAll:', error);
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/admin/doctors/:doctorId/approve
+ * Toggles a doctor's is_approved flag and dispatches a notification to the
+ * doctor's user_id.
+ *
+ * Body: { isApproved: boolean }
+ */
+export const approveDoctor = async (req, res, next) => {
+  try {
+    const { doctorId } = req.params;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(doctorId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'doctorId must be a valid UUID.' });
+    }
+
+    const isApproved = Boolean(req.body?.isApproved);
+
+    const { data: doctor, error } = await supabase
+      .from('doctor_profiles')
+      .update({ is_approved: isApproved })
+      .eq('id', doctorId)
+      .select('id, user_id, first_name, last_name, is_approved')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!doctor) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Doctor not found.' });
+    }
+
+    if (doctor.user_id) {
+      try {
+        await createNotification({
+          user_id: doctor.user_id,
+          type: 'GENERAL',
+          title: isApproved ? 'Account approved' : 'Account pending',
+          message: isApproved
+            ? 'Congratulations! Your doctor account has been approved. You can now start accepting appointments.'
+            : 'Your doctor account has been moved to pending. Please contact the admin for more details.',
+          action_link: '/doctor/profile',
+          metadata: { doctor_id: doctor.id },
+        });
+      } catch (notifError) {
+        console.error('[ApproveDoctor] Notification failed:', notifError.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        doctor: {
+          id: doctor.id,
+          isApproved: doctor.is_approved,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error in approveDoctor:', error);
+    next(error);
+  }
+};
+
+
+/**
+ * PUT /api/admin/doctors/:doctorId/info
+ * Updates editable profile details of a doctor. Only the provided fields are
+ * updated; omitted fields are left unchanged.
+ *
+ * Body (any subset): specialty_id, consultation_fee, experience_years,
+ *                    description, education
+ */
+export const updateAdminDoctorInfo = async (req, res, next) => {
+  try {
+    const { doctorId } = req.params;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(doctorId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'doctorId must be a valid UUID.' });
+    }
+
+    const {
+      specialty_id,
+      consultation_fee,
+      experience_years,
+      description,
+      education,
+    } = req.body || {};
+
+    const updates = {};
+
+    if (specialty_id !== undefined && specialty_id !== null) {
+      updates.specialty_id = String(specialty_id).trim();
+    }
+    if (consultation_fee !== undefined && consultation_fee !== null) {
+      const fee = Number(consultation_fee);
+      if (Number.isNaN(fee) || fee < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'consultation_fee must be a non-negative number.',
+        });
+      }
+      updates.consultation_fee = fee;
+    }
+    if (experience_years !== undefined && experience_years !== null) {
+      const years = Number(experience_years);
+      if (Number.isNaN(years) || years < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'experience_years must be a non-negative number.',
+        });
+      }
+      updates.experience_years = years;
+    }
+    if (description !== undefined) {
+      updates.description =
+        typeof description === 'string'
+          ? String(description).trim()
+          : description;
+    }
+    if (education !== undefined) {
+      updates.education =
+        typeof education === 'string'
+          ? String(education).trim()
+          : education;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields provided to update.',
+      });
+    }
+
+    const { data: doctor, error } = await supabase
+      .from('doctor_profiles')
+      .update(updates)
+      .eq('id', doctorId)
+      .select(
+        `id,
+        specialty_id,
+        consultation_fee,
+        experience_years,
+        description,
+        education,
+        specialties ( id, name )`
+      )
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!doctor) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Doctor not found.' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        doctor: {
+          id: doctor.id,
+          specialtyId: doctor.specialty_id,
+          specialty: doctor.specialties?.name || null,
+          consultationFee: Number(doctor.consultation_fee ?? 0),
+          experienceYears: doctor.experience_years ?? 0,
+          description: doctor.description,
+          education: doctor.education,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error in updateAdminDoctorInfo:', error);
+    next(error);
+  }
+};
+

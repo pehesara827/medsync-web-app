@@ -7,7 +7,7 @@ const PAGE_TITLES = {
   '/admin': 'Dashboard',
   '/admin/queue-management': 'Queue Management',
   '/admin/patient-records': 'Patient Records',
-  '/admin/schedule-delays': 'Schedule & Delays',
+  '/admin/schedule-delays': 'Schedule Management',
   '/admin/staff-management': 'Staff Management',
   '/admin/payments': 'Payments',
 };

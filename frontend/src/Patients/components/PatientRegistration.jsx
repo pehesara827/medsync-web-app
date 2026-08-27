@@ -117,13 +117,37 @@ export default function PatientRegistration() {
       return;
     }
 
+    // Pre-flight client-side validation so obvious mistakes never have to
+    // round-trip to the server (and never come back as a 500).
+    if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      window.alert('Please enter a valid email address.');
+      return;
+    }
+    if (!formData.password_hash || formData.password_hash.length < 6) {
+      window.alert('Password must be at least 6 characters long.');
+      return;
+    }
+    if (!formData.first_name || !formData.last_name) {
+      window.alert('Please fill in your first and last name.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Step A: Upload profile picture to Supabase Storage if a file was selected
+      // Step A: Upload profile picture to Supabase Storage if a file was selected.
+      // The profile picture is optional — if the upload fails we must NOT abort
+      // the registration (that previously surfaced as a failure before the
+      // backend was ever hit). Continue without a picture and warn instead.
       let profilePictureUrl = null;
+      let uploadError = null;
       if (formData.profile_picture instanceof File) {
-        profilePictureUrl = await uploadProfilePicture(formData.profile_picture);
+        try {
+          profilePictureUrl = await uploadProfilePicture(formData.profile_picture);
+        } catch (err) {
+          uploadError = err.message || 'Failed to upload profile picture.';
+          console.error('[PatientRegistration] profile picture upload failed:', err);
+        }
       }
 
       // Step B: Register via the backend API.
@@ -136,7 +160,7 @@ export default function PatientRegistration() {
         },
         body: JSON.stringify({
           // Credentials
-          username: formData.username,
+          username: formData.username || undefined,
           email: formData.email,
           password: formData.password_hash,
           terms_accepted: formData.terms_accepted,
@@ -145,13 +169,13 @@ export default function PatientRegistration() {
           profile_picture_url: profilePictureUrl,
           first_name: formData.first_name,
           last_name: formData.last_name,
-          date_of_birth: formData.date_of_birth,
-          gender: formData.gender,
-          phone_number: `${formData.phone_country_code}${formData.phone_number}`,
+          date_of_birth: formData.date_of_birth || null,
+          gender: formData.gender || null,
+          phone_number: `${formData.phone_country_code || '+1'}${formData.phone_number || ''}`,
           national_id_passport: formData.national_id_passport,
           emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_rel: formData.emergency_contact_rel,
-          emergency_contact_phone: `${formData.emergency_contact_phone_country_code}${formData.emergency_contact_phone}`,
+          emergency_contact_phone: `${formData.emergency_contact_phone_country_code || '+1'}${formData.emergency_contact_phone || ''}`,
           alt_contact_phone: formData.alt_contact_phone || null,
           home_address: formData.home_address || null,
           blood_group: formData.blood_group || null,
@@ -161,12 +185,17 @@ export default function PatientRegistration() {
       const result = await response.json();
 
       if (!response.ok) {
-        // Handle duplicate key violations (409) and other backend errors
+        // Handle duplicate key violations (409), validation errors (400/422),
+        // and any other backend error using the message returned by the server.
         throw new Error(result.message || 'Registration failed. Please try again.');
       }
 
       // Success — redirect to login page
-      window.alert('Registration completed successfully! You can now log in.');
+      window.alert(
+        uploadError
+          ? 'Registration completed successfully! (Your profile picture could not be uploaded; you can add one later.)'
+          : 'Registration completed successfully! You can now log in.'
+      );
       navigate('/login');
     } catch (error) {
       setSubmitError(error.message || 'An unexpected error occurred. Please try again.');

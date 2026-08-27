@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 const STATUS_TONE = {
   cyan: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-300',
@@ -177,15 +178,7 @@ export default function DoctorAppointments() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="flex flex-col items-center gap-3">
-                <svg className="h-8 w-8 animate-spin text-[#00a8cc]" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Loading appointments...</p>
-              </div>
-            </div>
+            <LoadingSpinner message="Loading appointments" fullscreen={false} />
           ) : appointments.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-sm text-slate-400 dark:text-slate-500">No appointments scheduled for this date.</p>

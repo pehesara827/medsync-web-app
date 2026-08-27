@@ -69,3 +69,19 @@ html, body, main {
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out forwards;
 }
+
+/* Slide-down animation for the success toast popup */
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -16px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.animate-toast-in {
+  animation: toastIn 0.35s ease-out forwards;
+}

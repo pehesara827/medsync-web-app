@@ -6,6 +6,7 @@ import AppointmentsTable from '../components/AppointmentsTable';
 import BookAppointmentModal from '../components/BookAppointmentModal';
 import AppointmentReviewModal from '../components/AppointmentReviewModal';
 import WaitlistStatusCard from '../components/WaitlistStatusCard';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 export default function PatientsAppointments() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -500,14 +501,9 @@ export default function PatientsAppointments() {
 
   if (loading || claimLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-slate-900">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[#00b8e6] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-200">
-            {claimLoading ? 'Loading your waitlist offer...' : 'Loading appointments...'}
-          </p>
-        </div>
-      </div>
+      <LoadingSpinner
+        message={claimLoading ? 'Loading your waitlist offer' : 'Loading your appointments'}
+      />
     );
   }
 

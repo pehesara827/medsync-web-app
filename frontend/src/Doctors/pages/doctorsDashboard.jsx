@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Users, Star, MessageSquare, Clock, BarChart3 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 const formatTime = (timeStr) => {
   if (!timeStr) return '—';
@@ -148,17 +149,7 @@ export default function DoctorDashboard() {
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-4">
-          <svg className="h-10 w-10 animate-spin text-[#00a8cc]" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          <p className="text-sm font-medium text-slate-500">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading your dashboard" />;
   }
 
   return (

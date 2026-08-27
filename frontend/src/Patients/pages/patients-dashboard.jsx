@@ -8,7 +8,7 @@ import RecentActivity from '../components/RecentActivity';
 import BookAppointmentModal from '../components/BookAppointmentModal';
 import DoctorProfileModal from '../components/DoctorProfileModal';
 import QRCodeModal from '../components/QRCodeModal';
-import LoadingSpinner from '../components/LoadingSpinner';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 export default function PatientsDashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,7 +102,7 @@ export default function PatientsDashboard() {
   }, []);
 
   if (loading) {
-    return <LoadingSpinner />;
+    return <LoadingSpinner message="Loading your dashboard" />;
   }
 
   return (

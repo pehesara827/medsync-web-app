@@ -3,6 +3,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import BrowseSpecialtySection from '../components/BrowseSpecialtySection';
 import DoctorSearchFilters from '../components/DoctorSearchFilters';
 import MainDoctorsCard from '../components/MainDoctorsCard';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 export default function PatientsDoctors() {
   const [selectedSpecialty, setSelectedSpecialty] = useState('All Specialties');
@@ -111,23 +112,7 @@ export default function PatientsDoctors() {
         </div>
 
         {loading ? (
-          <div className="grid gap-5 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-pulse">
-                <div className="p-3 sm:p-4 flex flex-col gap-3 sm:gap-4">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="h-12 w-12 rounded-2xl bg-slate-100 sm:h-16 sm:w-16"></div>
-                    <div className="space-y-2 flex-1">
-                      <div className="h-4 bg-slate-100 rounded w-3/4"></div>
-                      <div className="h-3 bg-slate-100 rounded w-1/2"></div>
-                    </div>
-                  </div>
-                  <div className="h-14 bg-slate-100 dark:bg-slate-700 rounded-3xl"></div>
-                  <div className="h-10 bg-slate-100 dark:bg-slate-700 rounded-3xl"></div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <LoadingSpinner message="Loading doctors" fullscreen={false} />
         ) : error ? (
           <div className="text-center py-8">
             <p className="text-sm text-red-600 dark:text-red-300">Failed to load doctors. Please try again later.</p>

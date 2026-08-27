@@ -55,6 +55,51 @@ export const registerPatient = async (registrationData) => {
     throw error;
   }
 
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const error = new Error('Please enter a valid email address.');
+    error.status = 400;
+    throw error;
+  }
+
+  // Normalise phone numbers to a consistent "+<digits>" format so DB
+  // type/length issues can't surface as a raw 500.
+  const normalizePhone = (value) => {
+    if (!value) return value;
+    const digits = String(value).replace(/[^\d]/g, '');
+    return digits ? `+${digits}` : null;
+  };
+
+  const normalizedPhone = normalizePhone(phone_number);
+  const normalizedEmergencyPhone = normalizePhone(emergency_contact_phone);
+  const normalizedAltPhone = normalizePhone(alt_contact_phone);
+
+  if (normalizedPhone && normalizedPhone.length > 20) {
+    const error = new Error('Phone number is too long. Please check the number you entered.');
+    error.status = 400;
+    throw error;
+  }
+
+  // Validate/normalise date of birth into a Postgres-friendly YYYY-MM-DD string.
+  let dob = date_of_birth || null;
+  if (dob) {
+    const parsed = new Date(`${dob}T00:00:00`);
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dob));
+    if (!match) {
+      const error = new Error('Please enter a valid date of birth (YYYY-MM-DD).');
+      error.status = 400;
+      throw error;
+    }
+    const y = Number(match[1]);
+    const m = Number(match[2]);
+    const d = Number(match[3]);
+    if (m < 1 || m > 12 || d < 1 || d > 31 || Number.isNaN(parsed.getTime())) {
+      const error = new Error('Please enter a valid date of birth.');
+      error.status = 400;
+      throw error;
+    }
+    dob = `${y.toString().padStart(4, '0')}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+  }
+
   // 1. Create the account in auth.users (email + password live here).
   //    The DB trigger `handle_new_user_registration` will automatically
   //    insert the matching row into public.users using the user metadata.
@@ -70,7 +115,20 @@ export const registerPatient = async (registrationData) => {
     },
   });
 
-  const userId = authUser.id;
+  const userId = authUser && authUser.id;
+
+  if (!userId) {
+    // Auth user wasn't created properly (e.g. missing service role key or an
+    // unexpected Supabase response). Report a clear 400/500 rather than a
+    // raw FK violation downstream.
+    const error = new Error(
+      authUser
+        ? 'User account could not be created (missing user id).'
+        : 'Unable to create the account. Please try again later.'
+    );
+    error.status = 500;
+    throw error;
+  }
 
   // 2. Insert into patient_profiles table
   try {
@@ -79,14 +137,14 @@ export const registerPatient = async (registrationData) => {
       profile_picture_url: profile_picture_url || null,
       first_name,
       last_name,
-      date_of_birth,
+      date_of_birth: dob,
       gender: gender || null,
-      phone_number,
+      phone_number: normalizedPhone,
       national_id_passport,
       emergency_contact_name,
       emergency_contact_rel,
-      emergency_contact_phone,
-      alt_contact_phone: alt_contact_phone || null,
+      emergency_contact_phone: normalizedEmergencyPhone,
+      alt_contact_phone: normalizedAltPhone,
       home_address: home_address || null,
       blood_group: blood_group || null,
     });

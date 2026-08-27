@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Timer, Hourglass, ArrowRight, Clock, CalendarClock, Users, Save, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 const DURATIONS = [
   { id: '15', label: '15 Mins', icon: Timer },
@@ -249,12 +250,7 @@ export default function DoctorScheduleManager() {
             <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Report Current Session Delay</h1>
 
             {loadingSession ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <RefreshCw className="w-8 h-8 animate-spin text-cyan-500 mx-auto mb-3" />
-                  <p className="text-slate-500 dark:text-slate-300">Loading current session...</p>
-                </div>
-              </div>
+              <LoadingSpinner message="Loading current session" fullscreen={false} />
             ) : sessionError ? (
               <div className="rounded-2xl border border-red-200 dark:border-red-600 bg-red-50 dark:bg-red-950 px-5 py-4 text-sm text-red-700 dark:text-red-200 flex items-start gap-3 text-left mt-6">
                 <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
@@ -344,12 +340,7 @@ export default function DoctorScheduleManager() {
           )}
 
           {loadingSchedules ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <RefreshCw className="w-8 h-8 animate-spin text-cyan-500 mx-auto mb-3" />
-                <p className="text-slate-500 dark:text-slate-300">Loading schedules...</p>
-              </div>
-            </div>
+            <LoadingSpinner message="Loading schedules" fullscreen={false} />
           ) : schedules.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-center">
               <div>

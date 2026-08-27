@@ -5,11 +5,11 @@ import {
   ListOrdered,
   Users,
   CalendarClock,
-  UserCog,
   CreditCard,
   HelpCircle,
   LogOut,
   ShieldCheck,
+  Stethoscope,
 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 
@@ -30,22 +30,22 @@ export const NAV_ITEMS = [
     icon: ListOrdered,
   },
   {
+    id: 'doctors',
+    label: 'Doctor Management',
+    path: '/admin/doctor-management',
+    icon: Stethoscope,
+  },
+  {
     id: 'patients',
-    label: 'Patient Records',
+    label: 'Patients Management',
     path: '/admin/patient-records',
     icon: Users,
   },
   {
     id: 'schedule',
-    label: 'Schedule/Delays',
+    label: 'Schedule Management',
     path: '/admin/schedule-delays',
     icon: CalendarClock,
-  },
-  {
-    id: 'staff',
-    label: 'Staff Management',
-    path: '/admin/staff-management',
-    icon: UserCog,
   },
   {
     id: 'payments',

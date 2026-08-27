@@ -25,9 +25,10 @@ import PatientsDoctors from './Patients/pages/patients-doctors';
 import AdminDashboard from './Admins/pages/adminDashboard';
 import QueueManagement from './Admins/pages/queueManagement';
 import PatientRecords from './Admins/pages/patientRecords';
-import ScheduleDelays from './Admins/pages/scheduleDelays';
+import ScheduleManagement from './Admins/pages/ScheduleManagement';
 import StaffManagement from './Admins/pages/staffManagement';
-import Payments from './Admins/pages/payments';
+import PaymentsManagement from './Admins/pages/PaymentsManagement';
+import DoctorManagement from './Admins/pages/DoctorManagement';
 
 import DoctorDashboard from './Doctors/pages/doctorsDashboard';
 import DoctorPatients from './Doctors/pages/doctorsPatients';
@@ -92,9 +93,10 @@ export default function App() {
           <Route index element={<AdminDashboard />} />
           <Route path="queue-management" element={<QueueManagement />} />
           <Route path="patient-records" element={<PatientRecords />} />
-          <Route path="schedule-delays" element={<ScheduleDelays />} />
+          <Route path="schedule-delays" element={<ScheduleManagement />} />
           <Route path="staff-management" element={<StaffManagement />} />
-          <Route path="payments" element={<Payments />} />
+          <Route path="payments" element={<PaymentsManagement />} />
+          <Route path="doctor-management" element={<DoctorManagement />} />
         </Route>
 
         {/* Catch-all route for unknown URLs */}
