@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, User, Calendar, CreditCard, ChevronDown, Loader2, AlertCircle, CheckCircle2, Upload, FileText, Building2, ArrowLeft, ArrowRight, Landmark } from 'lucide-react';
+import { X, User, Calendar, CreditCard, ChevronDown, Loader2, AlertCircle, CheckCircle2, Upload, FileText, Building2, ArrowLeft, ArrowRight, Landmark, Lock, ShieldCheck, Copy, Check, Download, Camera, ExternalLink } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import AppointmentConfirmationPass from './AppointmentConfirmationPass';
 import WaitlistModal from './WaitlistModal';
+import PaymentGatewayModal from './PaymentGatewayModal';
 
 export default function BookAppointmentModal({
   isOpen,
@@ -51,7 +52,14 @@ export default function BookAppointmentModal({
   const [slipFile, setSlipFile] = useState(null);
   const [slipPreview, setSlipPreview] = useState('');
   const [uploadingSlip, setUploadingSlip] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [slipLightboxOpen, setSlipLightboxOpen] = useState(false);
+  const [copiedField, setCopiedField] = useState('');
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+
+  // ── Online payment gateway state ───────────────────────────────────
+  const [paymentGatewayOpen, setPaymentGatewayOpen] = useState(false);
 
   // ── Data state ─────────────────────────────────────────────────────
   const [currentPatientId, setCurrentPatientId] = useState(null);
@@ -303,8 +311,7 @@ export default function BookAppointmentModal({
   };
 
   // ── Slip file handling ─────────────────────────────────────────────
-  const handleSlipFileChange = (e) => {
-    const file = e.target.files?.[0];
+  const addSlipFile = (file) => {
     if (!file) return;
 
     // Validate file type (images and PDFs)
@@ -323,13 +330,45 @@ export default function BookAppointmentModal({
     setError('');
     setSlipFile(file);
 
-    // Create preview for images
+    // Create preview for images (data URL) or PDFs (object URL)
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (event) => setSlipPreview(event.target.result);
       reader.readAsDataURL(file);
+    } else if (file.type === 'application/pdf') {
+      setSlipPreview(URL.createObjectURL(file));
     } else {
       setSlipPreview('');
+    }
+  };
+
+  const handleSlipFileChange = (e) => {
+    addSlipFile(e.target.files?.[0]);
+  };
+
+  const handleSlipDrop = (e) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer?.files?.[0];
+    addSlipFile(file);
+  };
+
+  const handleCopyText = async (text, fieldKey) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(fieldKey);
+      setTimeout(() => setCopiedField(''), 2000);
+    } catch {
+      setError('Unable to copy. Please copy the details manually.');
+    }
+  };
+
+  const openSlipPreview = () => {
+    if (!slipFile) return;
+    if (slipFile.type.startsWith('image/')) {
+      setSlipLightboxOpen(true);
+    } else if (slipFile.type === 'application/pdf' && slipPreview) {
+      window.open(slipPreview, '_blank');
     }
   };
 
@@ -396,9 +435,20 @@ export default function BookAppointmentModal({
     setCurrentStep(1);
   };
 
+  const handleProceedToPay = () => {
+    setError('');
+    setPaymentGatewayOpen(true);
+  };
+
+  const handleGatewaySuccess = (transactionId) => {
+    setPaymentGatewayOpen(false);
+    // Continue the booking + payment confirmation flow with the gateway result
+    handleSubmit(null, transactionId);
+  };
+
   // ── Submission: full booking transaction flow ──────────────────────
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e, gatewayTx = null) => {
+    if (e?.preventDefault) e.preventDefault();
     setError('');
     setSuccess('');
     setSubmitting(true);
@@ -488,6 +538,7 @@ export default function BookAppointmentModal({
         requestBody = {
           amount: selectedSchedule.consultation_fee,
           payment_method: mapPaymentMethod(paymentMethod),
+          receipt_slip_url: slipUrl,
         };
       } else if (isEditMode) {
         url = `${backendUrl}/api/appointments/${editingAppointment.id}`;
@@ -515,10 +566,25 @@ export default function BookAppointmentModal({
       const result = await response.json();
       const appointmentData = result.appointment;
 
-      // 8. Update payment status if bank transfer (only for new bookings)
-      if (!isEditMode && !isClaimMode && paymentMethod === 'bank' && appointmentData.appointmentId) {
-        // Payment status is already set to PENDING_SLIP_VERIFICATION by backend
-        console.log('Bank transfer payment pending verification');
+      // 8. For online gateway, mark the payment as PAID via the sandbox endpoint
+      let finalPaymentStatus = appointmentData.paymentStatus;
+      if (!isEditMode && paymentMethod === 'online' && gatewayTx && appointmentData.appointmentId) {
+        try {
+          const simResponse = await fetch(`${backendUrl}/api/payments/simulate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              appointmentId: appointmentData.appointmentId,
+              transactionId: gatewayTx,
+            }),
+          });
+          if (simResponse.ok) {
+            const simResult = await simResponse.json();
+            finalPaymentStatus = simResult?.data?.payment?.payment_status || 'PAID';
+          }
+        } catch (simErr) {
+          console.error('Failed to confirm online payment:', simErr.message);
+        }
       }
 
       // 9. Set confirmed appointment with server-generated data
@@ -531,7 +597,7 @@ export default function BookAppointmentModal({
         specialization: appointmentData.specialization,
         appointmentDate: appointmentData.appointmentDate,
         timeSlot: appointmentData.timeSlot,
-        paymentStatus: appointmentData.paymentStatus,
+        paymentStatus: finalPaymentStatus,
         qrPayload: appointmentData.qrPayload,
         qrDataUrl: appointmentData.qrDataUrl, // Server-generated QR code
       });
@@ -548,6 +614,8 @@ export default function BookAppointmentModal({
           ? 'Appointment confirmed! Your waitlist offer has been accepted.'
           : paymentMethod === 'bank'
           ? 'Appointment booked! Your payment slip has been submitted for verification.'
+          : paymentMethod === 'online'
+          ? 'Appointment booked and payment received successfully!'
           : 'Appointment booked successfully!'
       );
     } catch (err) {
@@ -1021,17 +1089,41 @@ export default function BookAppointmentModal({
                         Bank Transfer Details
                       </h4>
                       <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-slate-500 dark:text-slate-400">Bank</span>
                           <span className="font-semibold text-slate-700 dark:text-slate-100">Pehesara Medical Bank</span>
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center gap-3">
                           <span className="text-slate-500 dark:text-slate-400">Account Name</span>
-                          <span className="font-semibold text-slate-700 dark:text-slate-100">MedSync Health Services</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-100 flex items-center gap-1.5">
+                            MedSync Health Services
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText('MedSync Health Services', 'accountName')}
+                              className="p-1 rounded-md text-slate-400 hover:text-[#00b8e6] hover:bg-[#00b8e6]/10 transition"
+                              title="Copy account name"
+                            >
+                              {copiedField === 'accountName'
+                                ? <Check size={14} className="text-emerald-500" />
+                                : <Copy size={14} />}
+                            </button>
+                          </span>
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center gap-3">
                           <span className="text-slate-500 dark:text-slate-400">Account Number</span>
-                          <span className="font-semibold text-slate-700 dark:text-slate-100">1234-5678-9012</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-100 flex items-center gap-1.5">
+                            1234-5678-9012
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText('1234-5678-9012', 'accountNumber')}
+                              className="p-1 rounded-md text-slate-400 hover:text-[#00b8e6] hover:bg-[#00b8e6]/10 transition"
+                              title="Copy account number"
+                            >
+                              {copiedField === 'accountNumber'
+                                ? <Check size={14} className="text-emerald-500" />
+                                : <Copy size={14} />}
+                            </button>
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-slate-500 dark:text-slate-400">Amount</span>
@@ -1049,30 +1141,57 @@ export default function BookAppointmentModal({
                       </label>
 
                       {!slipFile ? (
-                        <button
-                          type="button"
+                        <div
+                          onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                          onDragLeave={() => setDragActive(false)}
+                          onDrop={handleSlipDrop}
                           onClick={() => fileInputRef.current?.click()}
-                          className="w-full border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-8 text-center hover:border-[#00b8e6] hover:bg-[#00b8e6]/5 dark:hover:bg-slate-800 transition group"
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
+                          className={`w-full border-2 border-dashed rounded-2xl p-8 text-center transition group cursor-pointer ${
+                            dragActive
+                              ? 'border-[#00b8e6] bg-[#00b8e6]/10'
+                              : 'border-slate-300 dark:border-slate-700 hover:border-[#00b8e6] hover:bg-[#00b8e6]/5 dark:hover:bg-slate-800'
+                          }`}
                         >
-                          <Upload size={32} className="mx-auto mb-3 text-slate-400 group-hover:text-[#00b8e6] transition" />
-                          <p className="text-sm font-semibold text-slate-600 dark:text-slate-200 group-hover:text-[#00b8e6] transition">
-                            Click to upload your payment slip
+                          <Upload
+                            size={32}
+                            className={`mx-auto mb-3 transition ${dragActive ? 'text-[#00b8e6]' : 'text-slate-400 group-hover:text-[#00b8e6]'}`}
+                          />
+                          <p className={`text-sm font-semibold transition ${dragActive ? 'text-[#00b8e6]' : 'text-slate-600 dark:text-slate-200 group-hover:text-[#00b8e6]'}`}>
+                            {dragActive ? 'Drop your payment slip here' : 'Drag & drop your payment slip here'}
                           </p>
                           <p className="text-xs text-slate-400 dark:text-slate-400 mt-1">JPG, PNG, WEBP, or PDF (max 5MB)</p>
-                        </button>
+                        </div>
                       ) : (
                         <div className="rounded-2xl border border-emerald-200 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-950 p-4">
                           <div className="flex items-center gap-4">
-                            {slipPreview ? (
-                              <img
-                                src={slipPreview}
-                                alt="Slip preview"
-                                className="w-20 h-20 object-cover rounded-xl border border-emerald-200"
-                              />
+                            {slipFile.type.startsWith('image/') && slipPreview ? (
+                              <button
+                                type="button"
+                                onClick={openSlipPreview}
+                                className="relative group/slip flex-shrink-0"
+                                title="Click to preview slip"
+                              >
+                                <img
+                                  src={slipPreview}
+                                  alt="Slip preview"
+                                  className="w-20 h-20 object-cover rounded-xl border border-emerald-200 cursor-pointer"
+                                />
+                                <span className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover/slip:opacity-100 transition flex items-center justify-center">
+                                  <ExternalLink size={16} className="text-white" />
+                                </span>
+                              </button>
                             ) : (
-                              <div className="w-20 h-20 rounded-xl bg-emerald-100 flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={openSlipPreview}
+                                className="w-20 h-20 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0 cursor-pointer hover:bg-emerald-200 transition"
+                                title="Preview slip file"
+                              >
                                 <FileText size={32} className="text-emerald-500" />
-                              </div>
+                              </button>
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-semibold text-slate-700 dark:text-slate-100 truncate">{slipFile.name}</p>
@@ -1088,6 +1207,7 @@ export default function BookAppointmentModal({
                               type="button"
                               onClick={removeSlipFile}
                               className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition"
+                              title="Remove slip"
                             >
                               <X size={18} />
                             </button>
@@ -1102,15 +1222,34 @@ export default function BookAppointmentModal({
                         onChange={handleSlipFileChange}
                         className="hidden"
                       />
+                      <input
+                        ref={cameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleSlipFileChange}
+                        className="hidden"
+                      />
 
                       {!slipFile && (
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="mt-3 w-full py-2.5 rounded-xl border border-[#00b8e6] text-[#00b8e6] text-sm font-semibold hover:bg-[#00b8e6]/5 transition"
-                        >
-                          Browse Files
-                        </button>
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="w-full py-2.5 rounded-xl border border-[#00b8e6] text-[#00b8e6] text-sm font-semibold hover:bg-[#00b8e6]/5 transition flex items-center justify-center gap-2"
+                          >
+                            <Upload size={16} />
+                            Browse Files
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => cameraInputRef.current?.click()}
+                            className="w-full py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-200 text-sm font-semibold hover:border-[#00b8e6] hover:text-[#00b8e6] transition flex items-center justify-center gap-2"
+                          >
+                            <Camera size={16} />
+                            Take Photo
+                          </button>
+                        </div>
                       )}
                     </div>
 
@@ -1121,13 +1260,19 @@ export default function BookAppointmentModal({
                   </div>
                 )}
 
-                {/* Online Gateway: Payment Confirmation */}
+                {/* Online Gateway: Secure Checkout */}
                 {isOnlineGateway && (
                   <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-5">
-                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
-                      <CreditCard size={16} className="text-[#00b8e6]" />
-                      Online Payment
-                    </h4>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        <CreditCard size={16} className="text-[#00b8e6]" />
+                        Secure Online Checkout
+                      </h4>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold border border-emerald-200 dark:border-emerald-500/30">
+                        <ShieldCheck size={13} />
+                        Sandbox Test
+                      </span>
+                    </div>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-3">
@@ -1143,9 +1288,24 @@ export default function BookAppointmentModal({
                           {selectedSchedule ? `Rs. ${Number(selectedSchedule.consultation_fee).toLocaleString()}` : '—'}
                         </span>
                       </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {[
+                          { icon: Lock, label: '256-bit SSL Encrypted' },
+                          { icon: ShieldCheck, label: 'Fraud-Protected' },
+                          { icon: FileText, label: 'Instant Digital Receipt' },
+                        ].map(({ icon: BadgeIcon, label }) => (
+                          <div
+                            key={label}
+                            className="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+                          >
+                            <BadgeIcon size={15} className="text-[#00b8e6] flex-shrink-0" />
+                            <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+                          </div>
+                        ))}
+                      </div>
                       <p className="text-xs text-slate-400 flex items-start gap-2">
-                        <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-amber-500" />
-                        You will be redirected to the secure payment gateway to complete your payment.
+                        <Lock size={14} className="flex-shrink-0 mt-0.5 text-emerald-500" />
+                        You will be taken to a secure sandbox checkout to simulate your card payment. No real money is charged.
                       </p>
                     </div>
                   </div>
@@ -1185,6 +1345,25 @@ export default function BookAppointmentModal({
                   Next
                   <ArrowRight size={16} />
                 </button>
+              ) : currentStep === 2 && isOnlineGateway ? (
+                <button
+                  type="button"
+                  onClick={handleProceedToPay}
+                  disabled={submitting}
+                  className="px-6 py-3 rounded-xl bg-[#00b8e6] text-white font-semibold text-sm hover:bg-[#00a3cc] shadow-md hover:shadow-lg transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={16} />
+                      Proceed to Pay
+                    </>
+                  )}
+                </button>
               ) : (
                 <button
                   type="submit"
@@ -1210,6 +1389,64 @@ export default function BookAppointmentModal({
          </form>
          </div>
          )}
+
+         {/* Slip Lightbox */}
+         {slipLightboxOpen && slipPreview && (
+           <div
+             className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+             onClick={() => setSlipLightboxOpen(false)}
+           >
+             <div
+               className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-3xl w-full p-4"
+               onClick={(e) => e.stopPropagation()}
+             >
+               <div className="flex items-center justify-between mb-3">
+                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-100 truncate pr-4">
+                   {slipFile?.name}
+                 </p>
+                 <button
+                   type="button"
+                   onClick={() => setSlipLightboxOpen(false)}
+                   className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition flex-shrink-0"
+                 >
+                   <X size={18} className="text-slate-600 dark:text-slate-200" />
+                 </button>
+               </div>
+               <img
+                 src={slipPreview}
+                 alt="Payment slip preview"
+                 className="w-full max-h-[65vh] object-contain rounded-xl bg-slate-50 dark:bg-slate-800"
+               />
+               <div className="flex justify-end gap-3 mt-4">
+                 <a
+                   href={slipPreview}
+                   download={slipFile?.name || 'payment-slip'}
+                   className="px-4 py-2 rounded-xl border border-[#00b8e6] text-[#00b8e6] text-sm font-semibold hover:bg-[#00b8e6]/5 transition flex items-center gap-2"
+                 >
+                   <Download size={16} />
+                   Download
+                 </a>
+                 <button
+                   type="button"
+                   onClick={() => setSlipLightboxOpen(false)}
+                   className="px-4 py-2 rounded-xl bg-[#00b8e6] text-white text-sm font-semibold hover:bg-[#00a3cc] transition"
+                 >
+                   Done
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
+
+         {/* Online Payment Gateway Modal */}
+         <PaymentGatewayModal
+           key={`gateway-${paymentGatewayOpen}`}
+           isOpen={paymentGatewayOpen}
+           onClose={() => !submitting && setPaymentGatewayOpen(false)}
+           amount={selectedSchedule?.consultation_fee ?? 0}
+           doctorName={selectedDoctor ? `Dr. ${selectedDoctor.first_name} ${selectedDoctor.last_name}` : ''}
+           onSuccess={handleGatewaySuccess}
+         />
 
          {/* Waitlist Modal */}
          <WaitlistModal

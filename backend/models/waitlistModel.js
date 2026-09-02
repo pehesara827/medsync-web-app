@@ -414,6 +414,7 @@ export const acceptWaitlistOffer = async (waitlistId, paymentData = {}) => {
       appointment_date: waitlistEntry.doctor_schedules?.available_date,
       amount: paymentData.amount ?? schedule.consultation_fee ?? 0,
       payment_method: paymentData.payment_method || 'PAY_AT_RECEPTION',
+      receipt_slip_url: paymentData.receipt_slip_url || null,
     });
 
     // Update waitlist entry to CONVERTED

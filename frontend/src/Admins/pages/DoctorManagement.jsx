@@ -20,6 +20,7 @@ import {
   Banknote,
   AlertTriangle,
   MessageSquare,
+  Stethoscope,
 } from 'lucide-react';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AddNewDoctorModal from '../components/AddNewDoctorModal';
@@ -426,6 +427,32 @@ const STATUS_STYLES = {
 const currency = (amount) =>
   `LKR ${Number(amount).toLocaleString('en-LK', { maximumFractionDigits: 0 })}`;
 
+// -----------------------------------------------
+// Doctor avatar with initials fallback
+// (live data may have no doctor_image — rendering
+// <img src=""> triggers a React empty-src warning)
+// -----------------------------------------------
+function DoctorAvatar({ name, src, className }) {
+  if (src) {
+    return <img src={src} alt={name || 'Doctor'} className={className} />;
+  }
+  const initials = (name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() || '')
+    .join('');
+  return (
+    <div
+      role="img"
+      aria-label={name || 'Doctor'}
+      className={`${className} flex items-center justify-center bg-gradient-to-br from-[#00a8cc] to-[#00728f] font-semibold text-white select-none`}
+    >
+      {initials || <Stethoscope className="w-1/2 h-1/2 opacity-80" />}
+    </div>
+  );
+}
+
 const formatDate = (iso) => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -723,7 +750,7 @@ export default function DoctorManagement() {
       {/* C. Main Data Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[760px]">
             <thead>
               <tr className="text-left text-xs text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
                 <th className="px-6 py-3 font-medium">Doctor</th>
@@ -754,10 +781,10 @@ export default function DoctorManagement() {
                     {/* Doctor */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <img
+                        <DoctorAvatar
+                          name={doc.name}
                           src={doc.avatar}
-                          alt={doc.name}
-                          className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                          className="w-10 h-10 rounded-full border border-slate-200 dark:border-slate-700"
                         />
                         <div className="min-w-0">
                           <p className="font-medium text-slate-900 dark:text-slate-200 truncate">
@@ -916,10 +943,10 @@ export default function DoctorManagement() {
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <img
+                      <DoctorAvatar
+                        name={selectedDoctor.name}
                         src={selectedDoctor.avatar}
-                        alt={selectedDoctor.name}
-                        className="w-16 h-16 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                        className="w-16 h-16 rounded-full border border-slate-200 dark:border-slate-700"
                       />
                       <div>
                         <p className="font-semibold text-slate-900 dark:text-slate-200 text-lg leading-tight">

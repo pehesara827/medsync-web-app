@@ -6,9 +6,9 @@ import {
   Stethoscope,
   Loader2,
   AlertCircle,
-  CheckCircle2,
   Plus,
 } from 'lucide-react';
+import AppointmentConfirmationPass from '../../Patients/components/AppointmentConfirmationPass';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -21,6 +21,14 @@ function formatTime(timeStr) {
   const period = hours >= 12 ? 'PM' : 'AM';
   const hour12 = hours % 12 === 0 ? 12 : hours % 12;
   return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+}
+
+// Generate a structured display ID from a UUID
+// Format: MED-<first 8 chars of UUID uppercased, no dashes>
+function generateDisplayId(uuid) {
+  if (!uuid) return 'MED-UNKNOWN';
+  const shortId = uuid.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return `MED-${shortId}`;
 }
 
 export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
@@ -135,59 +143,50 @@ export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
 
   // ── Success view ──────────────────────────────────────────────────────
   if (result) {
+    // Map the manually-created walk-in into the exact card shape the shared
+    // patient pass expects (mirrors BookAppointmentModal's usage and the
+    // createAppointment controller response). The pass renders the QR
+    // client-side from qrPayload since manual appointments have no
+    // server-generated QR image.
+    const verificationCode = `CHK-${result.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+    const selectedDoctor = doctors.find((d) => d.id === doctorId);
+    const passAppointment = {
+      appointmentId: result.id,
+      displayId: generateDisplayId(result.id),
+      verificationCode,
+      patientName:
+        `${result.patient_first_name || ''} ${result.patient_last_name || ''}`.trim() || '—',
+      doctorName: result.doctor_name || '—',
+      specialization: selectedDoctor?.specialty || '—',
+      appointmentDate: result.appointment_date || '',
+      timeSlot: formatTime(result.start_time),
+      paymentStatus: 'PAY_AT_RECEPTION', // walk-ins settle payment at the desk
+      qrPayload: JSON.stringify({
+        appointment_id: result.id,
+        verification_code: verificationCode,
+      }),
+      qrDataUrl: '',
+    };
+
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={handleDone} />
-        <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-8">
-          <div className="flex flex-col items-center text-center">
-            <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-            </div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-              Appointment Added
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Walk-in appointment recorded successfully.
-            </p>
-
-            <div className="w-full mt-6 rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Patient</span>
-                <span className="font-medium text-slate-800 dark:text-slate-100">
-                  {result.patient_first_name} {result.patient_last_name}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Doctor</span>
-                <span className="font-medium text-slate-800 dark:text-slate-100">
-                  {result.doctor_name || '—'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Date</span>
-                <span className="font-medium text-slate-800 dark:text-slate-100">
-                  {result.appointment_date}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Time</span>
-                <span className="font-medium text-slate-800 dark:text-slate-100">
-                  {formatTime(result.start_time)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Status</span>
-                <span className="font-medium text-[#00a8cc]">{result.status}</span>
-              </div>
-            </div>
-          </div>
-
+        {/* Same panel treatment as the patient QRCodeModal so the pass looks identical */}
+        <div className="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
           <button
+            type="button"
             onClick={handleDone}
-            className="mt-6 w-full px-4 py-2.5 text-sm font-medium rounded-lg bg-[#00a8cc] text-white hover:bg-[#0099bb]"
+            className="absolute top-4 right-4 z-10 p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            aria-label="Close QR code"
           >
-            Done
+            <X size={20} />
           </button>
+          <div className="p-4 md:p-6">
+            <AppointmentConfirmationPass
+              appointment={passAppointment}
+              onDone={handleDone}
+            />
+          </div>
         </div>
       </div>
     );
@@ -198,7 +197,7 @@ export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-white dark:bg-slate-900 px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between z-10">
           <div>
             <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
               New Appointment
@@ -215,7 +214,7 @@ export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
           {error && (
             <div className="flex items-center gap-2 rounded-lg border border-rose-300 bg-rose-50 dark:bg-slate-800 p-3 text-sm text-rose-700 dark:text-rose-300">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -383,7 +382,7 @@ export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
             )}
           </div>
 {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
             <button
               type="button"
               onClick={onClose}

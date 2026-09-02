@@ -232,6 +232,25 @@ export const createSchedule = async (req, res, next) => {
         .json({ success: false, message: 'Doctor not found.' });
     }
 
+    // Prevent duplicate schedule slots (same doctor, date and start time).
+    // Double-clicks or repeated requests all share this guard server-side, so a
+    // duplicate can never be created regardless of how many requests are fired.
+    const { data: existing, error: dupError } = await supabase
+      .from('doctor_schedules')
+      .select('id')
+      .eq('doctor_id', doctor_id)
+      .eq('available_date', available_date)
+      .eq('start_time', start_time)
+      .maybeSingle();
+
+    if (dupError) throw dupError;
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        message: 'A schedule already exists for this doctor on this date/time.',
+      });
+    }
+
     // Insert the new schedule slot
     const { data: schedule, error } = await supabase
       .from('doctor_schedules')
@@ -458,11 +477,41 @@ export const getAdminScheduleList = async (req, res, next) => {
 
     if (error) throw error;
 
+    // Booked counts must reflect BOTH tables: public `appointments` (tracked
+    // via current_appointment) and admin-added `manual_appointments`, matched
+    // by doctor + date + start_time. Walk-ins with no start_time don't consume
+    // slot capacity.
+    const manualCountByKey = new Map(); // `${doctor_id}|${date}|${time}` -> count
+    if ((schedules || []).length > 0) {
+      let manualQuery = supabase
+        .from('manual_appointments')
+        .select('doctor_id, appointment_date, start_time')
+        .neq('status', 'CANCELLED');
+
+      // Mirror the schedule filters so only relevant walk-ins are tallied.
+      if (doctor_id) manualQuery = manualQuery.eq('doctor_id', doctor_id);
+      if (date) manualQuery = manualQuery.eq('appointment_date', date);
+
+      const { data: manualRows, error: manualErr } = await manualQuery;
+
+      if (manualErr) throw manualErr;
+
+      for (const row of manualRows || []) {
+        if (!row.start_time) continue;
+        const key = `${row.doctor_id}|${row.appointment_date}|${row.start_time}`;
+        manualCountByKey.set(key, (manualCountByKey.get(key) || 0) + 1);
+      }
+    }
+
     const list = (schedules || []).map((s) => {
       const doctor = s.doctor_profiles || {};
       const specialty = doctor.specialties?.name || null;
       const maxPatients = s.max_patients ?? 1;
-      const currentAppointment = s.current_appointment ?? 0;
+      const walkIns =
+        manualCountByKey.get(
+          `${s.doctor_id}|${s.available_date}|${s.start_time}`
+        ) || 0;
+      const currentAppointment = (s.current_appointment ?? 0) + walkIns;
       return {
         id: s.id,
         doctorId: s.doctor_id,
@@ -476,6 +525,7 @@ export const getAdminScheduleList = async (req, res, next) => {
         consultationFee: Number(s.consultation_fee ?? 0),
         maxPatients,
         currentAppointment,
+        walkIns,
         capacityRatio:
           maxPatients > 0 ? currentAppointment / maxPatients : 0,
         isBooked: s.is_booked ?? false,
@@ -488,6 +538,44 @@ export const getAdminScheduleList = async (req, res, next) => {
     res.json({ success: true, data: { schedules: list } });
   } catch (error) {
     console.error('Error in getAdminScheduleList:', error);
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/admin/schedules/:scheduleId
+ * Permanently deletes a schedule slot. Because doctor_schedules is referenced
+ * by appointments (and those by payments) and appointment_waitlists with
+ * ON DELETE CASCADE, deleting the row removes its linked appointments,
+ * payments and waitlist entries automatically.
+ */
+export const deleteSchedule = async (req, res, next) => {
+  try {
+    const { scheduleId } = req.params;
+    if (!isValidUuid(scheduleId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'scheduleId must be a valid UUID.' });
+    }
+
+    const { data: deleted, error } = await supabase
+      .from('doctor_schedules')
+      .delete()
+      .eq('id', scheduleId)
+      .select('id')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: 'Schedule not found.',
+      });
+    }
+
+    res.json({ success: true, data: { scheduleId: deleted.id } });
+  } catch (error) {
+    console.error('Error in deleteSchedule:', error);
     next(error);
   }
 };

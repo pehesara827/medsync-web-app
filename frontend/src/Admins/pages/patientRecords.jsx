@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Filter, Calendar, X, ChevronRight, Heart, Users2, RotateCcw, Phone, MapPin } from 'lucide-react';
 import LoadingSpinner from '../../components/LoadingSpinner';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+import {
+  fetchAdminPatients,
+  fetchAdminPatientById,
+} from '../../components/api/adminPatientApi';
 
 // Display labels for the status filter dropdown. Backend accepts:
 //   pending (incl. confirmed), completed, cancelled
@@ -36,6 +38,13 @@ function formatDate(value) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// Display label for the status chip. Patients registered in the system who
+// have never booked an appointment arrive with `status: null`.
+function statusLabel(status) {
+  if (!status) return 'No visits';
+  return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
 export default function PatientRecords() {
   const [patients, setPatients] = useState([]);
   const [total, setTotal] = useState(0);
@@ -52,18 +61,12 @@ export default function PatientRecords() {
     setLoading(true);
     setError('');
     try {
-      const params = new URLSearchParams();
-      if (statusFilter) params.set('status', statusFilter);
-      if (dateFilter) params.set('date', dateFilter);
-
-      const res = await fetch(`${API_BASE_URL}/admin/patients?${params.toString()}`);
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `Failed to load patients (${res.status})`);
-      }
-      const data = await res.json();
-      setPatients(data.patients || []);
-      setTotal(data.total ?? (data.patients || []).length);
+      const { patients: rows, total: totalCount } = await fetchAdminPatients({
+        status: statusFilter,
+        date: dateFilter,
+      });
+      setPatients(rows);
+      setTotal(totalCount);
     } catch (err) {
       setError(`Failed to load patients: ${err.message}`);
     } finally {
@@ -72,7 +75,11 @@ export default function PatientRecords() {
   }, []);
 
   useEffect(() => {
-    fetchPatients(status, date);
+    // Deferred one tick so no state is set synchronously inside the effect
+    // (react-hooks/set-state-in-effect). Clearing the pending timer on filter
+    // changes also skips redundant fetches when filters toggle rapidly.
+    const timer = setTimeout(() => fetchPatients(status, date), 0);
+    return () => clearTimeout(timer);
   }, [fetchPatients, status, date]);
 
   const openDetail = async (patient) => {
@@ -80,12 +87,21 @@ export default function PatientRecords() {
     // Best-effort: enrich with the full detail endpoint. Falls back to the
     // list row data if it fails so the panel still works.
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/patients/${patient.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.patient) setSelected({ ...patient, ...data.patient });
+      const detail = await fetchAdminPatientById(patient.id);
+      if (detail) {
+        const merged = { ...patient, ...detail };
+        // The detail endpoint returns the account owner's profile for
+        // beneficiary bookings — keep the beneficiary's own identity.
+        if (detail.beneficiary) {
+          merged.name = detail.beneficiary.full_name || merged.name;
+          merged.age = detail.beneficiary.age ?? merged.age;
+          merged.gender = detail.beneficiary.gender || merged.gender;
+          merged.relationship = detail.beneficiary.relationship || '';
+          merged.referenceId = patient.referenceId || merged.referenceId;
+        }
+        setSelected(merged);
       }
-    } catch (e) {
+    } catch {
       // Ignore — keep using the lightweight row data.
     }
   };
@@ -108,7 +124,7 @@ export default function PatientRecords() {
   });
 return (
     <div className="relative">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Patients Management</h1>
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -116,7 +132,7 @@ return (
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search patients by name, ID..."
-            className="pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 w-72 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00a8cc] text-slate-900 dark:text-slate-100"
+            className="pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 w-full sm:w-72 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00a8cc] text-slate-900 dark:text-slate-100"
           />
         </div>
       </div>
@@ -181,14 +197,13 @@ return (
             </p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="text-left text-xs text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
                 <th className="px-6 py-3 font-medium">Patient Name</th>
                 <th className="px-6 py-3 font-medium">Patient ID</th>
                 <th className="px-6 py-3 font-medium">Contact</th>
                 <th className="px-6 py-3 font-medium">Last Visit</th>
-                <th className="px-6 py-3 font-medium">Status</th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
@@ -215,26 +230,21 @@ return (
                   <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{p.referenceId || `#${p.id}`}</td>
                   <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{p.phone || p.email || '—'}</td>
                   <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{formatDate(p.lastVisit)}</td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_STYLES[p.status] || 'bg-slate-100 text-slate-500'}`}>
-                      {(p.status || '').charAt(0) + (p.status || '').slice(1).toLowerCase()}
-                    </span>
-                  </td>
                   <td className="px-6 py-4 text-right">
                     <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 ml-auto" />
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
 {/* Slide-in detail panel */}
       {selected && (
         <>
           <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setSelected(null)} />
-          <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-slate-800 shadow-xl z-50 overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-6">
+          <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-slate-800 shadow-xl z-50 overflow-y-auto p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
               <button onClick={() => setSelected(null)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
                 <X className="w-4 h-4 text-slate-600 dark:text-slate-400" />
               </button>
@@ -280,7 +290,7 @@ return (
               <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
                 Last visit: {formatDate(selected.lastVisit)} • Status:{' '}
                 <span className={`font-medium ${(STATUS_STYLES[selected.status] || '').split(' ')[1] || 'text-slate-500'}`}>
-                  {(selected.status || '').charAt(0) + (selected.status || '').slice(1).toLowerCase()}
+                  {statusLabel(selected.status)}
                 </span>
               </p>
             )}

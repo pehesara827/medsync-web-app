@@ -45,13 +45,25 @@ export const getAdminDashboard = async (req, res, next) => {
     ).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     // ── 1. Total appointments today (excluding cancelled) ─────────────
-    const { count: totalAppointmentsToday, error: apptTodayError } = await supabase
+    // Public/self-service bookings (`appointments`) + admin-added walk-ins
+    // (`manual_appointments`) are tallied together.
+    const { count: publicApptsToday, error: apptTodayError } = await supabase
       .from('appointments')
       .select('id', { count: 'exact' })
       .eq('appointment_date', today)
       .neq('status', 'CANCELLED');
 
     if (apptTodayError) throw apptTodayError;
+
+    const { count: walkInsToday, error: walkInsTodayError } = await supabase
+      .from('manual_appointments')
+      .select('id', { count: 'exact' })
+      .eq('appointment_date', today)
+      .neq('status', 'CANCELLED');
+
+    if (walkInsTodayError) throw walkInsTodayError;
+
+    const totalAppointmentsToday = (publicApptsToday ?? 0) + (walkInsToday ?? 0);
 
     // ── 2. Active schedules today ─────────────────────────────────────
     const { count: activeSchedules, error: schedulesError } = await supabase
@@ -91,17 +103,31 @@ export const getAdminDashboard = async (req, res, next) => {
 
     if (completedErr) throw completedErr;
 
+    // Completed walk-ins count towards the same chart.
+    const { data: completedWalkInRows, error: completedWalkInErr } = await supabase
+      .from('manual_appointments')
+      .select('appointment_date')
+      .eq('status', 'COMPLETED')
+      .gte('appointment_date', startDateStr)
+      .lte('appointment_date', today);
+
+    if (completedWalkInErr) throw completedWalkInErr;
+
     const completedByDayMap = {};
     for (let i = 6; i >= 0; i--) {
       const label = weekDayLabel(i);
       completedByDayMap[label] = 0;
     }
-    for (const row of completedRows || []) {
-      const date = new Date(`${row.appointment_date}T00:00:00`);
-      if (Number.isNaN(date.getTime())) continue;
-      const label = date.toLocaleDateString('en-US', { weekday: 'short' });
-      if (label in completedByDayMap) completedByDayMap[label] += 1;
-    }
+    const tallyCompleted = (rows) => {
+      for (const row of rows || []) {
+        const date = new Date(`${row.appointment_date}T00:00:00`);
+        if (Number.isNaN(date.getTime())) continue;
+        const label = date.toLocaleDateString('en-US', { weekday: 'short' });
+        if (label in completedByDayMap) completedByDayMap[label] += 1;
+      }
+    };
+    tallyCompleted(completedRows);
+    tallyCompleted(completedWalkInRows);
 
     // Convert the per-day tally map into an ordered array for the bar chart
     const completedByDay = Object.entries(completedByDayMap).map(([day, count]) => ({
@@ -114,6 +140,7 @@ export const getAdminDashboard = async (req, res, next) => {
       .from('doctor_schedules')
       .select(
         `id,
+        doctor_id,
         start_time,
         doctor_profiles (
           first_name,
@@ -144,6 +171,48 @@ export const getAdminDashboard = async (req, res, next) => {
       }
     }
 
+    // Manual walk-ins fold into their matching slot (doctor + start_time);
+    // ones with no matching schedule get their own row so they stay visible.
+    const { data: walkInRows, error: walkInErr } = await supabase
+      .from('manual_appointments')
+      .select(
+        `doctor_id,
+        start_time,
+        doctor_profiles (
+          first_name,
+          last_name,
+          specialization,
+          specialties ( name )
+        )`
+      )
+      .eq('appointment_date', today)
+      .neq('status', 'CANCELLED');
+
+    if (walkInErr) throw walkInErr;
+
+    const unmatchedWalkIns = new Map(); // `${doctor_id}|${time}` -> entry
+    for (const w of walkInRows || []) {
+      const slot = (scheduleRows || []).find(
+        (s) => s.doctor_id === w.doctor_id && s.start_time === (w.start_time || null)
+      );
+      if (slot) {
+        countBySchedule.set(slot.id, (countBySchedule.get(slot.id) || 0) + 1);
+        continue;
+      }
+      const key = `${w.doctor_id}|${w.start_time || ''}`;
+      const entry = unmatchedWalkIns.get(key) || {
+        time: w.start_time,
+        doctor:
+          `Dr. ${w.doctor_profiles?.first_name || ''} ${w.doctor_profiles?.last_name || ''}`.trim() ||
+          '—',
+        specialty:
+          w.doctor_profiles?.specialties?.name || w.doctor_profiles?.specialization || '—',
+        count: 0,
+      };
+      entry.count += 1;
+      unmatchedWalkIns.set(key, entry);
+    }
+
     const timeSlots = (scheduleRows || []).map((slot) => {
       const doctor = slot.doctor_profiles || {};
       const doctorName = `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim();
@@ -154,6 +223,16 @@ export const getAdminDashboard = async (req, res, next) => {
         count: countBySchedule.get(slot.id) || 0,
       };
     });
+
+    for (const entry of unmatchedWalkIns.values()) {
+      timeSlots.push({
+        time: entry.time ? formatTime(entry.time) : '—',
+        doctor: entry.doctor,
+        specialty: entry.specialty,
+        count: entry.count,
+        isWalkIn: true,
+      });
+    }
 
     // ── 7. Currently active schedule slot (today, start <= now <= end) ─
     const { data: currentSlot, error: activeErr } = await supabase
@@ -346,15 +425,40 @@ export const getAdminSchedules = async (req, res, next) => {
 
     if (error) throw error;
 
-    const slots = (schedules || []).map((s) => ({
-      id: s.id,
-      start_time: s.start_time,
-      end_time: s.end_time,
-      maxPatients: s.max_patients ?? 1,
-      currentAppointment: s.current_appointment ?? 0,
-      isFull: (s.current_appointment ?? 0) >= (s.max_patients ?? 1),
-      consultationFee: s.consultation_fee ?? 0,
-    }));
+    // Slot capacity must reflect bookings from BOTH tables: public
+    // `appointments` (tracked via current_appointment) and admin-added
+    // `manual_appointments` (matched by doctor + date + start_time).
+    const { data: manualRows, error: manualErr } = await supabase
+      .from('manual_appointments')
+      .select('start_time')
+      .eq('doctor_id', doctor_id)
+      .eq('appointment_date', date)
+      .neq('status', 'CANCELLED');
+
+    if (manualErr) throw manualErr;
+
+    const manualCountByTime = new Map();
+    for (const row of manualRows || []) {
+      if (!row.start_time) continue; // unscheduled walk-ins consume no slot
+      manualCountByTime.set(
+        row.start_time,
+        (manualCountByTime.get(row.start_time) || 0) + 1
+      );
+    }
+
+    const slots = (schedules || []).map((s) => {
+      const booked =
+        (s.current_appointment ?? 0) + (manualCountByTime.get(s.start_time) || 0);
+      return {
+        id: s.id,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        maxPatients: s.max_patients ?? 1,
+        currentAppointment: booked,
+        isFull: booked >= (s.max_patients ?? 1),
+        consultationFee: s.consultation_fee ?? 0,
+      };
+    });
 
     res.json({ slots });
   } catch (error) {
@@ -408,6 +512,42 @@ export const createManualAppointment = async (req, res, next) => {
       doctorName = `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim();
     }
 
+    // Capacity guard: refuse bookings beyond the slot's max_patients. The
+    // tally covers BOTH tables — public `appointments` (current_appointment)
+    // and previously added walk-ins. A walk-in with no matching schedule row
+    // (or no start_time) is allowed through — admin override.
+    if (start_time) {
+      const { data: slot, error: slotError } = await supabase
+        .from('doctor_schedules')
+        .select('id, max_patients, current_appointment')
+        .eq('doctor_id', doctor_id)
+        .eq('available_date', appointment_date)
+        .eq('start_time', start_time)
+        .maybeSingle();
+
+      if (slotError) throw slotError;
+
+      if (slot) {
+        const { count: manualCount, error: manualCountError } = await supabase
+          .from('manual_appointments')
+          .select('id', { count: 'exact' })
+          .eq('doctor_id', doctor_id)
+          .eq('appointment_date', appointment_date)
+          .eq('start_time', start_time)
+          .neq('status', 'CANCELLED');
+
+        if (manualCountError) throw manualCountError;
+
+        const booked = (slot.current_appointment ?? 0) + (manualCount ?? 0);
+        if (booked >= (slot.max_patients ?? 1)) {
+          return res.status(409).json({
+            message:
+              'The selected time slot is already full. Please choose a different slot.',
+          });
+        }
+      }
+    }
+
     const { data: appointment, error } = await supabase
       .from('manual_appointments')
       .insert([
@@ -446,10 +586,19 @@ export const createManualAppointment = async (req, res, next) => {
  */
 export const getManualAppointments = async (req, res, next) => {
   try {
-    const { data: appointments, error } = await supabase
+    const { date } = req.query;
+
+    let query = supabase
       .from('manual_appointments')
       .select('*')
       .order('created_at', { ascending: false });
+
+    // Optional date filter (YYYY-MM-DD) for views that only need one day.
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+      query = query.eq('appointment_date', String(date));
+    }
+
+    const { data: appointments, error } = await query;
 
     if (error) throw error;
 
@@ -1057,13 +1206,17 @@ const mapPatientAppointment = (appt) => {
 
 /**
  * GET /api/admin/patients?status=&date=
- * Lists all patients (account owners + related beneficiaries) with optional
- * filters:
+ * Lists ALL patients registered in the system — every account owner from
+ * `patient_profiles` plus every `beneficiaries` record (family members) —
+ * with optional filters:
  *   - `status` : PENDING (includes CONFIRMED) | COMPLETED | CANCELLED
  *   - `date`   : exact date (YYYY-MM-DD) matched on appointment_date
  *
- * Returns the data of each patient's most recent matching appointment, plus a
- * `total` count for the "Showing X total patients" label.
+ * Each row is enriched with the patient's most recent matching appointment
+ * (`lastVisit` + `status`). Patients who never booked are still listed under
+ * "All statuses" with no date filter; when a status/date filter IS active the
+ * list only contains patients with a matching appointment (the filters are
+ * appointment-based), preserving the previous behaviour.
  */
 export const getAdminPatients = async (req, res, next) => {
   try {
@@ -1079,7 +1232,36 @@ export const getAdminPatients = async (req, res, next) => {
       return res.status(400).json({ message: dateResult.error.message });
     }
 
-    let query = supabase
+    const hasFilters = Boolean(statusResult.statuses || dateResult.date);
+
+    // 1. Every registered patient (account owner).
+    const { data: owners, error: ownersError } = await supabase
+      .from('patient_profiles')
+      .select(
+        `id,
+        first_name,
+        last_name,
+        date_of_birth,
+        gender,
+        phone_number,
+        blood_group,
+        home_address,
+        users (
+          email
+        )`
+      );
+    if (ownersError) throw ownersError;
+
+    // 2. Every beneficiary (family member linked to an owner account).
+    const { data: beneficiaryRows, error: benError } = await supabase
+      .from('beneficiaries')
+      .select('id, patient_id, full_name, age, gender, relationship');
+    if (benError) throw benError;
+
+    // 3. Appointments (respecting the status/date filters) so every patient
+    //    can be enriched with their most recent matching visit. Ordered most
+    //    recent first, so the first row seen per patient wins.
+    let apptQuery = supabase
       .from('appointments')
       .select(
         `id,
@@ -1114,20 +1296,19 @@ export const getAdminPatients = async (req, res, next) => {
       .order('created_at', { ascending: false });
 
     if (statusResult.statuses) {
-      query = query.in('status', statusResult.statuses);
+      apptQuery = apptQuery.in('status', statusResult.statuses);
     }
 
     if (dateResult.date) {
-      query = query.eq('appointment_date', dateResult.date);
+      apptQuery = apptQuery.eq('appointment_date', dateResult.date);
     }
 
-    const { data: appointments, error } = await query;
+    const { data: appointments, error: apptError } = await apptQuery;
+    if (apptError) throw apptError;
 
-    if (error) throw error;
-
-    // Deduplicate by patient (account owners vs beneficiaries keyed
-    // separately) and keep the most recent appointment for each.
-    const patientMap = new Map();
+    // Most recent (matching) appointment per patient — account owners and
+    // beneficiaries are keyed separately.
+    const apptMap = new Map();
     (appointments || []).forEach((appt) => {
       const key =
         appt.booking_type === 'BENEFICIARY' && appt.beneficiaries
@@ -1135,19 +1316,86 @@ export const getAdminPatients = async (req, res, next) => {
           : `pat_${appt.patient_profiles?.id}`;
       if (!key || /^pat_undefined$/.test(key)) return;
 
-      if (!patientMap.has(key)) {
-        patientMap.set(key, mapPatientAppointment(appt));
+      if (!apptMap.has(key)) {
+        apptMap.set(key, mapPatientAppointment(appt));
       }
     });
 
-    // Stable ordering by most recent visit (descending).
-    const patients = Array.from(patientMap.values()).sort((a, b) =>
-      String(b.lastVisit || '').localeCompare(String(a.lastVisit || ''))
-    );
+    const ownerById = new Map((owners || []).map((o) => [o.id, o]));
+    const patients = [];
+
+    // 4. One row per account owner; owners without any (matching) appointment
+    //    fall back to their plain profile data.
+    (owners || []).forEach((owner) => {
+      const mapped = apptMap.get(`pat_${owner.id}`);
+      if (mapped) {
+        patients.push(mapped);
+        return;
+      }
+      patients.push({
+        id: owner.id,
+        referenceId: shortPatientId(owner.id),
+        firstName: owner.first_name || '',
+        lastName: owner.last_name || '',
+        name: `${owner.first_name || ''} ${owner.last_name || ''}`.trim() || '—',
+        age: ageFromDob(owner.date_of_birth),
+        gender: owner.gender || '',
+        phone: owner.phone_number || '',
+        email: owner.users?.[0]?.email || '',
+        bloodGroup: owner.blood_group || '',
+        address: owner.home_address || '',
+        lastVisit: null,
+        status: null,
+        rawStatus: null,
+      });
+    });
+
+    // 5. One row per beneficiary. Beneficiaries have no contact details of
+    //    their own, so the linked account owner's info is used.
+    (beneficiaryRows || []).forEach((ben) => {
+      const owner = ownerById.get(ben.patient_id);
+      const mapped = apptMap.get(`ben_${ben.id}`);
+      if (mapped) {
+        patients.push(mapped);
+        return;
+      }
+      patients.push({
+        id: ben.id,
+        referenceId: shortPatientId(ben.id),
+        name: ben.full_name || '—',
+        age: ben.age ?? null,
+        gender: ben.gender || '',
+        relationship: ben.relationship || '',
+        phone: owner?.phone_number || '',
+        email: owner?.users?.[0]?.email || '',
+        bloodGroup: owner?.blood_group || '',
+        address: owner?.home_address || '',
+        lastVisit: null,
+        status: null,
+        rawStatus: null,
+      });
+    });
+
+    // 6. Status/date filters are appointment-based: with either filter active,
+    //    only patients having a matching appointment are listed.
+    const visible = hasFilters
+      ? patients.filter((p) => p.lastVisit && p.status)
+      : patients;
+
+    // Most recent visit first; patients without visits last, alphabetical.
+    visible.sort((a, b) => {
+      if (a.lastVisit && b.lastVisit && a.lastVisit !== b.lastVisit) {
+        return String(b.lastVisit).localeCompare(String(a.lastVisit));
+      }
+      if (Boolean(a.lastVisit) !== Boolean(b.lastVisit)) {
+        return a.lastVisit ? -1 : 1;
+      }
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
 
     res.json({
-      patients,
-      total: patients.length,
+      patients: visible,
+      total: visible.length,
     });
   } catch (error) {
     console.error('Error in getAdminPatients:', error);
@@ -1327,6 +1575,285 @@ export const getAdminPatientById = async (req, res, next) => {
     res.json({ patient: detail });
   } catch (error) {
     console.error('Error in getAdminPatientById:', error);
+    next(error);
+  }
+};
+
+/**
+ * Formats a TIME column (HH:MM:SS) into a 12-hour label.
+ */
+const formatScanTime = (timeStr) => {
+  if (!timeStr) return '—';
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return timeStr;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+};
+
+/**
+ * Formats a `YYYY-MM-DD` date into a friendly label (e.g. "Wed, Aug 28, 2026").
+ */
+const formatScanDate = (dateStr) => {
+  if (!dateStr) return '—';
+  const date = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateStr;
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+/**
+ * Validates a scanned appointment id (UUID v4, case-insensitive).
+ */
+/**
+ * Validates a scanned appointment id (UUID v4, case-insensitive).
+ */
+const isValidAppointmentUuid = (value) => {
+  if (typeof value !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+};
+
+/**
+ * GET /api/admin/scan/:appointmentId
+ * Resolves a QR-scanned appointment into the full detail card used by the
+ * Admin "Scan QR" page.
+ *
+ * The QR payload embeds `{ appointment_id, verification_code }`; the admin
+ * scanner passes the appointment id here and we join everything needed:
+ *   - Patient profile (photo, name, date_of_birth, gender) + auth email
+ *   - Beneficiary (for BENEFICIARY bookings) — name + relationship on top of
+ *     the account holder's profile photo
+ *   - Doctor schedule (date + time window) and doctor profile (name + specialty)
+ *   - Payments (method + status)
+ *
+ * Queue number is NOT a stored column — it is derived positionally from the
+ * appointment's created_at order within its schedule, matching the existing
+ * queue token format (A-01, A-02, …).
+ */
+export const getScannedAppointment = async (req, res, next) => {
+  try {
+    const { appointmentId } = req.params;
+    if (!isValidAppointmentUuid(appointmentId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid appointment ID in QR payload.' });
+    }
+
+    // 1. Resolve the appointment with all related data.
+    const { data: appointment, error } = await supabase
+      .from('appointments')
+      .select(
+        `id,
+        patient_id,
+        booking_type,
+        beneficiary_id,
+        doctor_id,
+        schedule_id,
+        appointment_date,
+        status,
+        payment_status,
+        created_at,
+        patient_profiles (
+          id,
+          first_name,
+          last_name,
+          date_of_birth,
+          gender,
+          phone_number,
+          profile_picture_url,
+          users ( email )
+        ),
+        beneficiaries (
+          id,
+          full_name,
+          age,
+          gender,
+          relationship
+        ),
+        doctor_profiles (
+          id,
+          first_name,
+          last_name,
+          specialization,
+          doctor_image,
+          specialties ( id, name )
+        ),
+        doctor_schedules (
+          id,
+          available_date,
+          start_time,
+          end_time,
+          max_patients
+        ),
+        payments (
+          id,
+          amount,
+          payment_method,
+          payment_status
+        )`,
+      )
+      .eq('id', appointmentId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!appointment) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Appointment not found for the scanned QR code.' });
+    }
+
+    // 2. Derive the queue position.
+    let queuePosition = null;
+    if (appointment.schedule_id) {
+      const { data: queueAppts, error: queueError } = await supabase
+        .from('appointments')
+        .select('id, created_at')
+        .eq('schedule_id', appointment.schedule_id)
+        .neq('status', 'CANCELLED')
+        .order('created_at', { ascending: true });
+
+      if (queueError) throw queueError;
+      const index = (queueAppts || []).findIndex((a) => a.id === appointment.id);
+      if (index !== -1) queuePosition = index + 1;
+    }
+
+    // 3. Resolve the displayed patient (beneficiary takes precedence by name,
+    //    but the profile picture/Dob come from the account holder profile).
+    const profile = appointment.patient_profiles || {};
+    const beneficiary = appointment.beneficiaries || null;
+    const isBeneficiary = appointment.booking_type === 'BENEFICIARY';
+
+    const patientName = isBeneficiary && beneficiary
+      ? beneficiary.full_name || '—'
+      : `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || '—';
+
+    const patientDob = profile.date_of_birth || '';
+    const patientAge = isBeneficiary && beneficiary
+      ? (beneficiary.age ?? ageFromDob(patientDob))
+      : ageFromDob(patientDob);
+
+    const schedule = appointment.doctor_schedules || {};
+    const doctor = appointment.doctor_profiles || {};
+
+    res.json({
+      success: true,
+      data: {
+        appointment: {
+          id: appointment.id,
+          displayId: shortPatientId(appointment.id),
+          verificationCode: `CHK-${String(appointment.id).replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+          bookingType: appointment.booking_type,
+          isBeneficiary,
+          status: appointment.status,
+          appointmentDate: schedule.available_date || appointment.appointment_date,
+          dateLabel: formatScanDate(schedule.available_date || appointment.appointment_date),
+          timeLabel: schedule.start_time ? `${formatScanTime(schedule.start_time)} – ${formatScanTime(schedule.end_time)}` : '—',
+          queueNumber: queuePosition ? `A-${String(queuePosition).padStart(2, '0')}` : '—',
+          createdAt: appointment.created_at,
+          patient: {
+            profileId: profile.id || null,
+            name: patientName,
+            age: patientAge ?? null,
+            dateOfBirth: patientDob || '',
+            gender: profile.gender || (beneficiary?.gender || ''),
+            phone: profile.phone_number || '',
+            email: profile.users?.[0]?.email || '',
+            profilePictureUrl: profile.profile_picture_url || null,
+            relationship: isBeneficiary ? beneficiary?.relationship || 'Beneficiary' : 'Self',
+          },
+          doctor: {
+            name: `${doctor.first_name || ''} ${doctor.last_name || ''}`.trim() || '—',
+            specialty: doctor.specialties?.name || doctor.specialization || '—',
+            image: doctor.doctor_image || null,
+          },
+          payment: {
+            method: appointment.payments?.payment_method || '',
+            status: appointment.payment_status || appointment.payments?.payment_status || 'UNPAID',
+            amount: appointment.payments?.amount ?? null,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error in getScannedAppointment:', error);
+    next(error);
+  }
+};
+
+/**
+ * POST /api/admin/scan/:appointmentId/confirm
+ * Confirms a verified, on-desk appointment from the "Scan QR" page:
+ *   - appointments.status         -> 'COMPLETED'
+ *   - appointments.payment_status -> 'PAID'  (new column, added by migration)
+ *   - linked payments.payment_status -> 'PAID' + paid_at (keeps the rest of the
+ *     app consistent for the same appointment)
+ *
+ * Only PENDING/CONFIRMED appointments can be confirmed (avoids re-triggering
+ * the change for already-completed or cancelled bookings).
+ */
+export const confirmScannedAppointment = async (req, res, next) => {
+  try {
+    const { appointmentId } = req.params;
+    if (!isValidAppointmentUuid(appointmentId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid appointment ID.' });
+    }
+
+    // 1. Fetch the appointment to inspect its current status.
+    const { data: appointment, error } = await supabase
+      .from('appointments')
+      .select('id, status')
+      .eq('id', appointmentId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!appointment) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Appointment not found for the scanned QR code.' });
+    }
+
+    if (appointment.status === 'COMPLETED') {
+      return res
+        .status(409)
+        .json({ success: false, message: 'Appointment is already completed.' });
+    }
+    if (appointment.status === 'CANCELLED') {
+      return res
+        .status(409)
+        .json({ success: false, message: 'Cannot confirm a cancelled appointment.' });
+    }
+
+    // 2. Mark the appointment COMPLETED + its payment PAID.
+    const { data: updated, error: updateError } = await supabase
+      .from('appointments')
+      .update({ status: 'COMPLETED', payment_status: 'PAID' })
+      .eq('id', appointmentId)
+      .select('id, status, payment_status')
+      .maybeSingle();
+
+    if (updateError) throw updateError;
+
+    // 3. Keep the linked payments row in sync (best effort).
+    const { error: payErr } = await supabase
+      .from('payments')
+      .update({ payment_status: 'PAID', paid_at: new Date().toISOString() })
+      .eq('appointment_id', appointmentId);
+    if (payErr) {
+      console.warn('Could not update linked payment row:', payErr.message);
+    }
+
+    res.json({
+      success: true,
+      data: { appointment: updated },
+    });
+  } catch (error) {
+    console.error('Error in confirmScannedAppointment:', error);
     next(error);
   }
 };

@@ -159,7 +159,7 @@ export const getDoctorWaitlist = async (req, res, next) => {
 export const acceptOffer = async (req, res, next) => {
   try {
     const { waitlistId } = req.params;
-    const { amount, payment_method } = req.body;
+    const { amount, payment_method, receipt_slip_url } = req.body;
 
     if (!waitlistId) {
       return res.status(400).json({ message: 'Waitlist ID is required.' });
@@ -168,6 +168,7 @@ export const acceptOffer = async (req, res, next) => {
     const result = await waitlistModel.acceptWaitlistOffer(waitlistId, {
       amount,
       payment_method,
+      receipt_slip_url,
     });
 
     // Format the appointment response to match the createAppointment controller shape

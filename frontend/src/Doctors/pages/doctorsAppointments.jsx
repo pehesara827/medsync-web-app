@@ -118,7 +118,7 @@ export default function DoctorAppointments() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Appointment Management</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage records, appointments, and clinical notes.</p>
@@ -126,7 +126,7 @@ export default function DoctorAppointments() {
         <div className="relative">
           <input
             placeholder="Search patient ID, name, or MRN..."
-            className="pl-3 pr-9 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 w-64 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="pl-3 pr-9 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 w-full sm:w-64 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
           <Filter className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" />
         </div>
@@ -191,7 +191,7 @@ export default function DoctorAppointments() {
                 return (
                   <div
                     key={a.id}
-                    className={`flex items-center justify-between rounded-lg p-3 border ${
+                    className={`flex items-center justify-between gap-2 flex-wrap rounded-lg p-3 border ${
                       tone === 'rose' ? 'border-cyan-200 bg-cyan-50/40 dark:border-cyan-800 dark:bg-cyan-950/20' : 'border-slate-100 dark:border-slate-700'
                     }`}
                   >
@@ -223,7 +223,7 @@ export default function DoctorAppointments() {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
         <p className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-4">Recent Consultations</p>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm min-w-[560px]">
           <thead>
             <tr className="text-left text-[11px] text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
               <th className="py-2 font-medium">Date / Time</th>
@@ -250,7 +250,7 @@ export default function DoctorAppointments() {
               ))
             )}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

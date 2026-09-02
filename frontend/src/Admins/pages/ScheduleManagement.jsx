@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Plus,
@@ -9,12 +9,21 @@ import {
   UserRound,
   Search,
   X,
-  Ban,
   CheckCircle2,
   Clock,
+  Loader2,
+  AlertCircle,
+  Trash2,
 } from 'lucide-react';
 
-// ── Mock data (UI-only; replace with real API calls later) ────────────────
+import {
+  fetchAdminSchedules,
+  createSchedule,
+  fetchAdminDoctors,
+  deleteSchedule,
+} from '../../components/api/adminScheduleApi';
+
+// ── Mock data (offline fallback only; real data comes from the API) ───────
 const mockSchedules = [
   {
     id: 'SCH-1001',
@@ -145,8 +154,23 @@ const formatDate = (dateStr) => {
     year: 'numeric',
   });
 };
+
+// Converts a TIME value (HH:MM:SS or HH:MM, 24-hour) into a 12-hour label.
+// e.g. '10:30:00' -> '10:30 AM'
+const formatTime = (timeStr) => {
+  if (!timeStr) return '—';
+  const parts = String(timeStr).split(':').map(Number);
+  const hours = parts[0];
+  const minutes = parts[1];
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return timeStr;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+};
 export default function ScheduleManagement() {
-  const [schedules, setSchedules] = useState(mockSchedules);
+  const [schedules, setSchedules] = useState([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(true);
+  const [doctors, setDoctors] = useState(MOCK_DOCTORS); // fallback until API loads
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState(DEFAULT_DATE); // DEFAULT_DATE = Today
   const [statusFilter, setStatusFilter] = useState('all');
@@ -154,7 +178,87 @@ export default function ScheduleManagement() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedScheduleForDelay, setSelectedScheduleForDelay] = useState(null);
 
-  // ── Derived metrics for KPI cards ──────────────────────────────────
+  // ── Delete confirmation target ────────────────────────────────────────
+  const [scheduleToDelete, setScheduleToDelete] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+
+  // Guard against double-submits on the create button (fires before the async
+  // work starts, so rapid/multiple clicks can only ever send one request).
+  const [submittingCreate, setSubmittingCreate] = useState(false);
+  const submittingRef = useRef(false);
+
+  // ── Toast notification (popup for create schedule success / error) ────
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+
+  // Clear any pending auto-close timer on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  // Shows a top-of-screen popup that auto-closes after ~2.8s.
+  const showToast = (message, type = 'success') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 2800);
+  };
+
+  // ── Load schedules + approved doctors from the backend on mount ───────
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const [scheduleData, doctorData] = await Promise.all([
+          fetchAdminSchedules(),
+          fetchAdminDoctors(),
+        ]);
+        if (cancelled) return;
+
+        const mapped = (scheduleData || []).map((s) => ({
+          id: s.id,
+          doctorName: s.doctorName || 'Unknown Doctor',
+          doctorSpecialty: s.specialty || '',
+          doctorAvatar: (s.doctorName || '')
+            .replace('Dr. ', '')
+            .split(' ')
+            .map((w) => w && w[0])
+            .join('')
+            .toUpperCase(),
+          availableDate: s.availableDate,
+          startTime: formatTime(s.startTime),
+          endTime: formatTime(s.endTime),
+          consultationFee: Number(s.consultationFee ?? 0),
+          maxPatients: Number(s.maxPatients ?? 1),
+          currentAppointments: Number(s.currentAppointment ?? 0),
+          walkIns: Number(s.walkIns ?? 0),
+          isDelayed: Boolean(s.isDelayed),
+          delayMinutes: Number(s.delayMinutes ?? 0),
+          isBooked: Boolean(s.isBooked),
+        }));
+
+        if (cancelled) return;
+        setSchedules(mapped);
+        if (Array.isArray(doctorData) && doctorData.length > 0) {
+          setDoctors(doctorData);
+        }
+      } catch {
+        if (cancelled) return;
+        // Fall back to mock data so the page still renders offline.
+        setSchedules(mockSchedules);
+        showToast('Could not load schedules. Showing offline data.', 'error');
+      } finally {
+        if (!cancelled) setLoadingSchedules(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const todaySessions = schedules.filter((s) => s.availableDate === DEFAULT_DATE).length;
   const avgFill =
     schedules.length === 0
@@ -194,38 +298,100 @@ export default function ScheduleManagement() {
     });
   }, [schedules, searchQuery, dateFilter, statusFilter]);
 
-  const handleCreateSchedule = (e) => {
+  const handleCreateSchedule = async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
-    const newSchedule = {
-      id: `SCH-${Math.floor(1000 + Math.random() * 9000)}`,
-      doctorName: form.get('doctor'),
-      doctorSpecialty: '',
-      doctorAvatar: '',
-      availableDate: form.get('date') || DEFAULT_DATE,
-      startTime: form.get('startTime') || '09:00 AM',
-      endTime: form.get('endTime') || '12:00 PM',
-      consultationFee: Number(form.get('fee')) || 0,
-      maxPatients: Number(form.get('maxPatients')) || 1,
-      currentAppointments: 0,
-      isDelayed: false,
-      delayMinutes: 0,
-      isBooked: false,
+
+    const doctorName = form.get('doctor');
+    const doctor = doctors.find((d) => d.name === doctorName);
+
+    const payload = {
+      doctor_id: doctor ? doctor.id : null,
+      available_date: form.get('date') || DEFAULT_DATE,
+      start_time: form.get('startTime') || '09:00',
+      end_time: form.get('endTime') || '12:00',
+      consultation_fee: Number(form.get('fee')) || 0,
+      max_patients: Number(form.get('maxPatients')) || 1,
     };
 
-    const doctor = MOCK_DOCTORS.find((d) => d.name === newSchedule.doctorName);
-    if (doctor) {
-      newSchedule.doctorSpecialty = doctor.specialty;
-      newSchedule.doctorAvatar = doctor.name
-        .replace('Dr. ', '')
-        .split(' ')
-        .map((w) => w[0])
-        .join('')
-        .toUpperCase();
+    if (!payload.doctor_id) {
+      showToast('Please select a valid doctor.', 'error');
+      return;
     }
 
-    setSchedules((prev) => [...prev, newSchedule]);
-    setIsAddModalOpen(false);
+    // Double-click / rapid-click guard: only ever send ONE request.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmittingCreate(true);
+
+    try {
+      const result = await createSchedule(payload);
+      const created = result.data;
+
+      const avatar = (doctorName || '')
+        .replace('Dr. ', '')
+        .split(' ')
+        .map((w) => w && w[0])
+        .join('')
+        .toUpperCase();
+
+      const newRow = {
+        id: created.id,
+        doctorName: doctor?.name || doctorName || 'Unknown Doctor',
+        doctorSpecialty: doctor?.specialty || '',
+        doctorAvatar: avatar,
+        availableDate: created.available_date || payload.available_date,
+        startTime: formatTime(created.start_time || payload.start_time),
+        endTime: formatTime(created.end_time || payload.end_time),
+        consultationFee: Number(
+          created.consultation_fee ?? payload.consultation_fee ?? 0
+        ),
+        maxPatients: Number(
+          created.max_patients ?? payload.max_patients ?? 1
+        ),
+        currentAppointments: Number(created.current_appointment ?? 0),
+        walkIns: Number(created.walkIns ?? 0),
+        isDelayed: Boolean(created.is_delayed ?? false),
+        delayMinutes: Number(created.delay_minutes ?? 0),
+        isBooked: Boolean(created.is_booked ?? false),
+      };
+
+      // Add the new schedule to the table and show a success popup.
+      setSchedules((prev) => [...prev, newRow]);
+      setIsAddModalOpen(false);
+      showToast(
+        `Schedule created successfully for ${newRow.doctorName} on ${formatDate(
+          newRow.availableDate
+        )}.`
+      );
+    } catch (err) {
+      showToast(err.message || 'Failed to create schedule.', 'error');
+    } finally {
+      submittingRef.current = false;
+      setSubmittingCreate(false);
+    }
+  };
+
+  // ── Delete an existing schedule (hard delete; cascades appointments) ──
+  const handleDeleteSchedule = async (schedule) => {
+    setDeletingId(schedule.id);
+    try {
+      await deleteSchedule(schedule.id);
+      setSchedules((prev) => prev.filter((s) => s.id !== schedule.id));
+      setScheduleToDelete(null);
+      showToast(`Schedule for ${schedule.doctorName} deleted successfully.`);
+    } catch (err) {
+      showToast(err.message || 'Failed to delete schedule.', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // ── Reset the form when the "Add Schedule" modal is (re)opened ───────
+  const openAddModal = () => {
+    setIsAddModalOpen(true);
+    setSubmittingCreate(false);
+    submittingRef.current = false;
   };
 
   return (
@@ -242,8 +408,8 @@ export default function ScheduleManagement() {
         </div>
         <button
           type="button"
-          onClick={() => setIsAddModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-[#00a8cc] text-white hover:bg-[#0092b3] transition"
+          onClick={openAddModal}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-[#00a8cc] text-white hover:bg-[#0092b3] active:scale-95 transition"
         >
           <Plus className="w-4 h-4" />
           Add New Schedule
@@ -339,7 +505,7 @@ export default function ScheduleManagement() {
 {/* ── C. Main Schedules Table ──────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[880px]">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-700/40 text-left">
                 <th className="px-6 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Doctor</th>
@@ -381,6 +547,11 @@ export default function ScheduleManagement() {
                       <div className="flex items-center justify-between mb-1.5">
                         <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
                           {s.currentAppointments}/{s.maxPatients} booked
+                          {s.walkIns > 0 && (
+                            <span className="ml-1.5 text-[10px] font-semibold text-[#0092b3] dark:text-cyan-300">
+                              ({s.walkIns} walk-in{s.walkIns > 1 ? 's' : ''})
+                            </span>
+                          )}
                         </p>
                         <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">{fillPct}%</p>
                       </div>
@@ -425,18 +596,31 @@ export default function ScheduleManagement() {
                         </button>
                         <button
                           type="button"
-                          title="Emergency Cancel"
-                          aria-label="Emergency Cancel"
-                          className="p-2 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+                          title="Delete Schedule"
+                          aria-label="Delete Schedule"
+                          onClick={() => setScheduleToDelete(s)}
+                          className="p-2 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 active:scale-90 transition"
                         >
-                          <Ban className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
                   </tr>
                 );
               })}
-              {filteredSchedules.length === 0 && (
+              {loadingSchedules && filteredSchedules.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="w-6 h-6 text-[#00a8cc] animate-spin" />
+                      <p className="text-sm text-slate-400 dark:text-slate-500">
+                        Loading schedules...
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {!loadingSchedules && filteredSchedules.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center">
                     <p className="text-sm text-slate-400 dark:text-slate-500">No schedules match your filters.</p>
@@ -476,7 +660,7 @@ export default function ScheduleManagement() {
                   <label className={labelClass}>Doctor</label>
                   <select name="doctor" required className={inputClass} defaultValue="">
                     <option value="" disabled>Select a doctor...</option>
-                    {MOCK_DOCTORS.map((d) => (
+                    {doctors.map((d) => (
                       <option key={d.id} value={d.name}>
                         {d.name} · {d.specialty}
                       </option>
@@ -520,10 +704,20 @@ export default function ScheduleManagement() {
                   </button>
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-[#00a8cc] text-white hover:bg-[#0092b3] transition"
+                    disabled={submittingCreate}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-[#00a8cc] text-white hover:bg-[#0092b3] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:pointer-events-none transition"
                   >
-                    <Plus className="w-4 h-4" />
-                    Create Schedule
+                    {submittingCreate ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        Create Schedule
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -531,6 +725,67 @@ export default function ScheduleManagement() {
           </div>,
           document.body
 )}
+{/* ── D2. Delete Confirmation Modal ──────────────────────────────── */}
+      {scheduleToDelete &&
+        createPortal(
+          <div className="fixed inset-0 z-[125] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => !deletingId && setScheduleToDelete(null)}
+            />
+            <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl">
+              <div className="px-6 pt-6 pb-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center flex-shrink-0">
+                    <Trash2 className="w-5 h-5 text-rose-500 dark:text-rose-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      Delete Schedule?
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                      Delete the <span className="font-medium text-slate-700 dark:text-slate-200">{scheduleToDelete.doctorName}</span> slot on{" "}
+                      <span className="text-slate-700 dark:text-slate-200">
+                        {formatDate(scheduleToDelete.availableDate)} · {scheduleToDelete.startTime} - {scheduleToDelete.endTime}
+                      </span>
+                      ? This will permanently remove the schedule along with any
+                      booked appointments and waitlists.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-slate-100 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setScheduleToDelete(null)}
+                  disabled={deletingId === scheduleToDelete.id}
+                  className="px-5 py-2.5 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-60 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSchedule(scheduleToDelete)}
+                  disabled={deletingId === scheduleToDelete.id}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-rose-600 text-white hover:bg-rose-700 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:pointer-events-none transition"
+                >
+                  {deletingId === scheduleToDelete.id ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Delete Schedule
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 {/* ── E. Slide-Over: Session Delay Broadcaster ─────────────────── */}
       {selectedScheduleForDelay && (
         <SessionDelayDrawer
@@ -538,6 +793,28 @@ export default function ScheduleManagement() {
           onClose={() => setSelectedScheduleForDelay(null)}
         />
       )}
+
+      {/* ── F. Toast Notification (create schedule success / error) ─── */}
+      {toast &&
+        createPortal(
+          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[130] pointer-events-none">
+            <div
+              className={`flex items-center gap-2.5 px-5 py-3.5 rounded-xl text-white shadow-2xl border text-sm font-semibold animate-toast-in ${
+                toast.type === 'error'
+                  ? 'bg-rose-600 border-rose-500'
+                  : 'bg-emerald-600 border-emerald-500'
+              }`}
+            >
+              {toast.type === 'error' ? (
+                <AlertCircle className="w-4 h-4" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4" />
+              )}
+              {toast.message}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

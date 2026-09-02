@@ -13,6 +13,8 @@ import {
   createAdminDoctor,
   getAdminPatients,
   getAdminPatientById,
+  getScannedAppointment,
+  confirmScannedAppointment,
 } from '../controllers/adminController.js';
 import {
   getAdminDoctorsAll,
@@ -27,6 +29,7 @@ import {
 import {
   getAdminScheduleList,
   createSchedule,
+  deleteSchedule,
   broadcastSessionDelay,
   emergencyCancelSchedule,
 } from '../controllers/scheduleController.js';
@@ -34,6 +37,11 @@ import {
   getAdminWaitlistsBySchedule,
   manualNotify,
 } from '../controllers/waitlistController.js';
+import {
+  getTodayQueue,
+  getQueueSession,
+  completeAppointment,
+} from '../controllers/queueController.js';
 
 const router = Router();
 
@@ -45,6 +53,14 @@ router.get('/patients', getAdminPatients);
 
 // GET /api/admin/patients/:id - Full patient detail for the slide-in panel
 router.get('/patients/:id', getAdminPatientById);
+
+// GET /api/admin/scan/:appointmentId - Resolve a QR-scanned appointment into
+// the full detail card for the Admin "Scan QR" page.
+router.get('/scan/:appointmentId', getScannedAppointment);
+
+// POST /api/admin/scan/:appointmentId/confirm - Confirm a scanned appointment
+// at the desk: status -> COMPLETED and payment -> PAID.
+router.post('/scan/:appointmentId/confirm', confirmScannedAppointment);
 
 // GET /api/admin/doctors - Approved doctors for the booking dropdown
 router.get('/doctors', getAdminDoctors);
@@ -102,6 +118,23 @@ router.post('/schedules/:scheduleId/broadcast-delay', broadcastSessionDelay);
 
 // DELETE /api/admin/schedules/:scheduleId/emergency-cancel - Emergency cancel
 router.delete('/schedules/:scheduleId/emergency-cancel', emergencyCancelSchedule);
+
+// DELETE /api/admin/schedules/:scheduleId - Permanently delete a schedule slot
+router.delete('/schedules/:scheduleId', deleteSchedule);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Queue Management
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/queue/today - Today's schedules with capacity, booked/seen
+// counts and a derived Upcoming/Active/Finished status (right-hand list).
+router.get('/queue/today', getTodayQueue);
+
+// GET /api/admin/queue/:scheduleId - Full queue for a schedule (doctor, slot,
+// capacity, booked count and the patient queue ordered by created_at).
+router.get('/queue/:scheduleId', getQueueSession);
+
+// PATCH /api/admin/queue/:appointmentId/complete - Mark a queue entry COMPLETED.
+router.patch('/queue/:appointmentId/complete', completeAppointment);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Doctor Administration

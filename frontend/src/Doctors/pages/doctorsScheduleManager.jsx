@@ -246,7 +246,7 @@ export default function DoctorScheduleManager() {
       {/* ── Session Delay Tab ─────────────────────────────────────── */}
       {activeTab === 'delay' && (
         <div className="flex items-center justify-center min-h-[50vh]">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-10 w-full max-w-lg text-center">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 sm:p-10 w-full max-w-lg text-center">
             <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Report Current Session Delay</h1>
 
             {loadingSession ? (
@@ -258,7 +258,7 @@ export default function DoctorScheduleManager() {
               </div>
             ) : session ? (
               <>
-                <div className="flex items-center justify-center gap-4 mt-4 mb-8 text-sm">
+                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mt-4 mb-8 text-sm">
                   <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300">
                     <Clock className="w-3.5 h-3.5" /> Current Time: <span className="font-semibold text-slate-900 dark:text-slate-100">{formatTime(session.currentTime)}</span>
                   </span>
@@ -275,7 +275,7 @@ export default function DoctorScheduleManager() {
 
                 <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-wide mb-3">SELECT DELAY DURATION</p>
 
-                <div className="grid grid-cols-4 gap-3 mb-8">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
                   {DURATIONS.map(({ id, label, icon: Icon }) => (
                     <button
                       key={id}
@@ -309,7 +309,7 @@ export default function DoctorScheduleManager() {
       {/* ── Schedule Capacity Tab ─────────────────────────────────── */}
       {activeTab === 'capacity' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Schedule Capacity Management</h1>
             <button
               onClick={loadSchedules}
@@ -350,7 +350,7 @@ export default function DoctorScheduleManager() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                     <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Date</th>

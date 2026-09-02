@@ -201,7 +201,7 @@ return createPortal(
       <div className="relative h-full w-full flex items-center justify-center p-4">
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto flex flex-col">
           {/* Header */}
-          <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-[#e0f5f8] dark:bg-slate-800 flex items-center justify-center">
                 <UserPlus className="w-5 h-5 text-[#00a8cc]" />
@@ -225,7 +225,7 @@ return createPortal(
           </div>
 
           {/* Body */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
             {/* Feedback banners */}
             {formError && (
               <div className="flex items-start gap-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 text-sm rounded-lg px-4 py-3">
@@ -426,7 +426,7 @@ return createPortal(
               </div>
             </section>
 {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
               <button
                 type="button"
                 onClick={onClose}

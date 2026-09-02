@@ -52,7 +52,7 @@ export default function QueueManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Doctor Management</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage hospital clinical staff, efficiency, and department coverage.</p>
@@ -85,7 +85,7 @@ export default function QueueManagement() {
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm min-w-[760px]">
           <thead>
             <tr className="text-left text-xs text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
               <th className="px-6 py-3 font-medium">Name</th>
@@ -136,9 +136,9 @@ export default function QueueManagement() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
 
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-700">
           <p className="text-xs text-slate-400 dark:text-slate-500">Showing 1-3 of 124 doctors</p>
           <div className="flex items-center gap-1">
             <button className="w-7 h-7 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500">

@@ -75,6 +75,9 @@ export const createAppointment = async (bookingData) => {
     if (scheduleError) throw scheduleError;
 
     // Step 3: Insert initial payment record
+    const initialPaymentStatus =
+      bookingData.payment_method === 'BANK_TRANSFER' ? 'PENDING_SLIP_VERIFICATION' : 'UNPAID';
+
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .insert([
@@ -82,7 +85,8 @@ export const createAppointment = async (bookingData) => {
           appointment_id: appointment.id,
           amount: bookingData.amount || 0,
           payment_method: bookingData.payment_method || 'PAY_AT_RECEPTION',
-          payment_status: 'UNPAID',
+          payment_status: initialPaymentStatus,
+          receipt_slip_url: bookingData.receipt_slip_url || null,
         },
       ])
       .select()

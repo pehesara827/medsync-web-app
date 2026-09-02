@@ -66,7 +66,7 @@ export default function StaffManagement() {
 
   return (
     <div className="relative">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -80,12 +80,12 @@ export default function StaffManagement() {
         </button>
       </div>
 
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Staff Management</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Oversee system access, roles, and shift deployments for medical personnel.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {STATS.map(({ id, label, value, icon: Icon, tone }) => (
             <div key={id} className="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${tone === 'cyan' ? 'bg-[#00a8cc]/20' : 'bg-emerald-50'}`}>
@@ -100,7 +100,7 @@ export default function StaffManagement() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-6 flex items-center gap-3">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-6 flex flex-wrap items-center gap-3">
         <span className="text-sm text-slate-500 dark:text-slate-400">Filters:</span>
         <select className="text-sm border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
           <option>All Departments</option>
@@ -118,7 +118,7 @@ export default function StaffManagement() {
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr className="text-left text-xs text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
               <th className="px-6 py-3 font-medium">Staff Member</th>
@@ -159,9 +159,9 @@ export default function StaffManagement() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
 
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-700">
           <p className="text-xs text-slate-400 dark:text-slate-500">Showing 1-4 of 142 personnel</p>
           <div className="flex items-center gap-1">
             <button className="w-7 h-7 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500">
@@ -206,8 +206,8 @@ export default function StaffManagement() {
       {editing && (
         <>
           <div className="fixed inset-0 bg-black/30 z-40" onClick={closeEdit} />
-          <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-slate-800 shadow-xl z-50 overflow-y-auto p-6 flex flex-col">
-            <div className="flex items-start justify-between mb-6">
+          <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-slate-800 shadow-xl z-50 overflow-y-auto p-4 sm:p-6 flex flex-col">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-lg bg-[#00a8cc]/20 flex items-center justify-center">
                   <ShieldAlert className="w-4.5 h-4.5 text-[#00a8cc]" />
@@ -263,7 +263,7 @@ export default function StaffManagement() {
               <p className="text-xs text-rose-500 mt-1">Elevating these permissions requires dual-factor authorization from the hospital board.</p>
             </div>
 
-            <div className="flex gap-3 pt-6">
+            <div className="flex flex-col sm:flex-row gap-3 pt-6">
               <button onClick={closeEdit} className="flex-1 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-400">
                 Cancel
               </button>

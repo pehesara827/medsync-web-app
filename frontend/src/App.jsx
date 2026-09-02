@@ -13,6 +13,9 @@ import { DarkModeProvider } from './context/DarkModeContext';
 // Import Route Guard
 import ProtectedRoute from './components/ProtectedRoute';
 
+// Import AI Chat Assistant (floating widget shown across patient-facing pages)
+import ChatWidget from './components/ChatWidget';
+
 import PatientDashboard from './Patients/pages/patients-dashboard';
 import PatientsAppointments from './Patients/pages/patients-appoinments';
 import AppointmentConfirmationPage from './Patients/pages/AppointmentConfirmationPage';
@@ -23,7 +26,8 @@ import ContactUs from './Patients/pages/ContactUs';
 import PatientsDoctors from './Patients/pages/patients-doctors';
 
 import AdminDashboard from './Admins/pages/adminDashboard';
-import QueueManagement from './Admins/pages/queueManagement';
+import QueueManagement from './Admins/pages/QueueManagement';
+import QRScanner from './Admins/pages/QRScanner';
 import PatientRecords from './Admins/pages/patientRecords';
 import ScheduleManagement from './Admins/pages/ScheduleManagement';
 import StaffManagement from './Admins/pages/staffManagement';
@@ -88,21 +92,27 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* 4. ADMIN ROUTES (Admin Sidebar) */}
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="queue-management" element={<QueueManagement />} />
-          <Route path="patient-records" element={<PatientRecords />} />
-          <Route path="schedule-delays" element={<ScheduleManagement />} />
-          <Route path="staff-management" element={<StaffManagement />} />
-          <Route path="payments" element={<PaymentsManagement />} />
-          <Route path="doctor-management" element={<DoctorManagement />} />
+        {/* 4. ADMIN ROUTES (Admin Sidebar) - Protected */}
+        <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="queue-management" element={<QueueManagement />} />
+            <Route path="scan-qr" element={<QRScanner />} />
+            <Route path="patient-records" element={<PatientRecords />} />
+            <Route path="schedule-delays" element={<ScheduleManagement />} />
+            <Route path="staff-management" element={<StaffManagement />} />
+            <Route path="payments" element={<PaymentsManagement />} />
+            <Route path="doctor-management" element={<DoctorManagement />} />
+          </Route>
         </Route>
 
         {/* Catch-all route for unknown URLs */}
         <Route path="*" element={<NotFound />} />
 
       </Routes>
+
+      {/* Floating AI chat assistant — available across patient-facing pages */}
+      <ChatWidget />
       </DarkModeProvider>
     </Router>
   );

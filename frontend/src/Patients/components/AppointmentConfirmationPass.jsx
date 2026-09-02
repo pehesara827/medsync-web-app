@@ -105,6 +105,7 @@ const DetailItem = ({ icon: Icon, label, value, valueClass = '' }) => (
  */
 export default function AppointmentConfirmationPass({ appointment, onDone }) {
   const cardRef = useRef(null);
+  const qrCodeRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -134,8 +135,25 @@ export default function AppointmentConfirmationPass({ appointment, onDone }) {
   // ── Download QR Code (PNG) ─────────────────────────────────────────
   const handleDownloadQR = async () => {
     try {
-      // Use server-generated QR code (always available from backend)
+      // Prefer the server-generated QR code (always available from backend).
       if (!qrDataUrl) {
+        // Fallback (e.g. admin-added walk-in passes): no server QR exists, so
+        // rasterize the client-rendered QRCodeSVG element instead.
+        if (qrCodeRef.current) {
+          const canvas = await html2canvas(qrCodeRef.current, {
+            scale: 3,
+            backgroundColor: '#ffffff',
+            logging: false,
+          });
+          const link = document.createElement('a');
+          link.href = canvas.toDataURL('image/png');
+          link.download = `QR-Code-${displayRef}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast('QR code downloaded successfully!');
+          return;
+        }
         showToast('No QR code available for download.', 'error');
         return;
       }
@@ -317,7 +335,10 @@ export default function AppointmentConfirmationPass({ appointment, onDone }) {
         {/* ── QR Code Section ────────────────────────────────────────── */}
         <div className="px-6 -mt-6">
           <div className="relative bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg p-6 flex flex-col items-center">
-            <div className="p-3 bg-white rounded-xl border border-slate-100 dark:border-slate-600">
+            <div
+              ref={qrCodeRef}
+              className="p-3 bg-white rounded-xl border border-slate-100 dark:border-slate-600"
+            >
               {qrDataUrl ? (
                 <img
                   src={qrDataUrl}

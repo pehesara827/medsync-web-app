@@ -34,7 +34,7 @@ export default function Payments() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Payment Verification</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage pending transactions and generate patient tokens.</p>
@@ -63,7 +63,7 @@ export default function Payments() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
         {/* List */}
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden h-fit">
-          <div className="grid grid-cols-[1fr_140px_100px] px-6 py-3 text-xs text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
+          <div className="grid grid-cols-[1fr_110px_80px] sm:grid-cols-[1fr_140px_100px] px-6 py-3 text-xs text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
             <span>PATIENT DETAILS</span>
             <span>TYPE</span>
             <span className="text-right">AMOUNT</span>
@@ -74,7 +74,7 @@ export default function Payments() {
               <button
                 key={p.id}
                 onClick={() => setSelectedId(p.id)}
-                className={`w-full grid grid-cols-[1fr_140px_100px] items-center px-6 py-4 text-left border-l-4 ${
+                className={`w-full grid grid-cols-[1fr_110px_80px] sm:grid-cols-[1fr_140px_100px] items-center px-6 py-4 text-left border-l-4 ${
                   selectedId === p.id ? 'border-l-[#00a8cc] bg-[#e0f5f8]' : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-slate-700'
                 } border-b border-slate-50 dark:border-slate-700 last:border-b-0`}
               >

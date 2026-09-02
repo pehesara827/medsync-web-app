@@ -24,6 +24,8 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import scheduleRoutes from './routes/scheduleRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
 import { expireExpiredOffers } from './models/waitlistModel.js';
 
 // Routes
@@ -41,6 +43,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/schedules', scheduleRoutes);
 
 app.use('/api/patient/profile', userProfileRoutes);
+
+app.use('/api/payments', paymentRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -176,7 +176,7 @@ const fetchPaymentWithAppointment = async (paymentId) => {
  *     - payments.payment_status -> 'PAID'
  *     - payments.transaction_id -> transactionId (if provided)
  *     - payments.paid_at        -> NOW()
- *     - linked appointment.status -> 'CONFIRMED'
+ *     - appointments.payment_status -> 'PAID' (status stays PENDING)
  *     - notification 'PAYMENT_RECEIVED' to the patient
  *
  *   REJECTED:
@@ -231,11 +231,12 @@ export const verifyPaymentSlip = async (req, res, next) => {
 
       if (updateError) throw updateError;
 
-      // Confirm the linked appointment.
+      // Sync the appointment's payment status column. Appointment status stays
+      // PENDING — it only advances when the desk checks the patient in.
       if (appointment.id) {
         const { error: apptError } = await supabase
           .from('appointments')
-          .update({ status: 'CONFIRMED' })
+          .update({ payment_status: 'PAID' })
           .eq('id', appointment.id);
         if (apptError) throw apptError;
       }
@@ -304,7 +305,7 @@ export const verifyPaymentSlip = async (req, res, next) => {
  * PATCH /api/admin/payments/:id/collect-reception
  * Marks a pay-at-reception payment as collected at the front desk:
  *   - payments.payment_status -> 'PAID', paid_at -> NOW()
- *   - linked appointment.status -> 'CONFIRMED'
+ *   - appointments.payment_status -> 'PAID' (status stays PENDING)
  */
 export const collectReceptionPayment = async (req, res, next) => {
   try {
@@ -337,7 +338,7 @@ export const collectReceptionPayment = async (req, res, next) => {
     if (appointment.id) {
       const { error: apptError } = await supabase
         .from('appointments')
-        .update({ status: 'CONFIRMED' })
+        .update({ payment_status: 'PAID' })
         .eq('id', appointment.id);
       if (apptError) throw apptError;
     }
@@ -345,6 +346,88 @@ export const collectReceptionPayment = async (req, res, next) => {
     res.json({ success: true, data: { payment: updated } });
   } catch (error) {
     console.error('Error in collectReceptionPayment:', error);
+    next(error);
+  }
+};
+
+/**
+ * POST /api/payments/simulate
+ * Sandbox / simulated online payment gateway confirmation.
+ * Marks a linked payment as PAID and syncs the appointment's payment column.
+ *
+ * Body: { appointmentId, transactionId?, amount? }
+ *   - payments.payment_status  -> 'PAID'
+ *   - payments.transaction_id  -> transactionId (or a generated TXN-... id)
+ *   - payments.paid_at         -> NOW()
+ *   - appointments.payment_status -> 'PAID' (status stays PENDING)
+ *
+ * If the payment is already PAID the request is idempotent and returns the
+ * existing record with `alreadyPaid: true`.
+ */
+export const simulateOnlinePayment = async (req, res, next) => {
+  try {
+    const { appointmentId, transactionId } = req.body || {};
+
+    if (!isValidUuid(appointmentId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'appointmentId must be a valid UUID.',
+      });
+    }
+
+    // Fetch the payment linked to the appointment
+    const { data: payment, error: fetchError } = await supabase
+      .from('payments')
+      .select('id, appointment_id, amount, payment_status, transaction_id')
+      .eq('appointment_id', appointmentId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'No payment record found for this appointment.',
+      });
+    }
+
+    if (payment.payment_status === 'PAID') {
+      return res.json({ success: true, data: { payment, alreadyPaid: true } });
+    }
+
+    // Generate a transaction id if the gateway didn't provide one
+    const finalTransactionId =
+      transactionId && String(transactionId).trim()
+        ? String(transactionId).trim()
+        : `TXN-${Date.now().toString(36).toUpperCase()}${Math.random()
+            .toString(36)
+            .slice(2, 6)
+            .toUpperCase()}`;
+
+    const { data: updated, error: updateError } = await supabase
+      .from('payments')
+      .update({
+        payment_status: 'PAID',
+        transaction_id: finalTransactionId,
+        paid_at: new Date().toISOString(),
+      })
+      .eq('id', payment.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // Sync the appointment's payment status column (appointment.status stays
+    // PENDING — it only advances when the desk checks the patient in).
+    const { error: apptError } = await supabase
+      .from('appointments')
+      .update({ payment_status: 'PAID' })
+      .eq('id', appointmentId);
+
+    if (apptError) throw apptError;
+
+    return res.json({ success: true, data: { payment: updated } });
+  } catch (error) {
+    console.error('Error in simulateOnlinePayment:', error);
     next(error);
   }
 };

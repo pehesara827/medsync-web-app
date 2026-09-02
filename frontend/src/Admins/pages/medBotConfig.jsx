@@ -54,7 +54,7 @@ export default function MedBotConfig() {
         <div className="space-y-6">
           {/* Knowledge base */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <div>
                 <p className="font-medium text-slate-900 dark:text-slate-100">Knowledge Base</p>
                 <p className="text-xs text-slate-400 dark:text-slate-500">Sync clinic schedules and specialty descriptions</p>
@@ -64,7 +64,7 @@ export default function MedBotConfig() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div className="border border-slate-100 dark:border-slate-700 rounded-lg p-4 flex items-start justify-between">
                 <div className="flex items-start gap-2">
                   <Calendar className="w-4 h-4 text-[#00a8cc] mt-0.5" />
@@ -97,13 +97,13 @@ export default function MedBotConfig() {
 
           {/* Recent queries */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <p className="font-medium text-slate-900 dark:text-slate-100">Recent Patient Queries</p>
               <button className="flex items-center gap-1 text-xs font-medium text-[#00a8cc]">
                 View Detailed Analytics <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="text-left text-xs text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
                   <th className="py-2 font-medium">Patient Query Snippet</th>
@@ -124,7 +124,7 @@ export default function MedBotConfig() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
         </div>
 

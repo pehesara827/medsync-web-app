@@ -10,6 +10,7 @@ import {
   LogOut,
   ShieldCheck,
   Stethoscope,
+  ScanLine,
 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 
@@ -28,6 +29,12 @@ export const NAV_ITEMS = [
     label: 'Queue Management',
     path: '/admin/queue-management',
     icon: ListOrdered,
+  },
+  {
+    id: 'scan-qr',
+    label: 'Scan QR',
+    path: '/admin/scan-qr',
+    icon: ScanLine,
   },
   {
     id: 'doctors',

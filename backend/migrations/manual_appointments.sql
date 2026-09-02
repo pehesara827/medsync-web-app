@@ -22,7 +22,9 @@ create table public.manual_appointments (
   patient_date_of_birth date null,
 
   -- Doctor + scheduling
-  doctor_id uuid not null,
+  -- doctor_id is nullable so ON DELETE SET NULL works: doctor_name is
+  -- snapshot-copied at booking time, so rows survive doctor deletion.
+  doctor_id uuid null,
   doctor_name text null,
   appointment_date date not null,
   start_time time null,

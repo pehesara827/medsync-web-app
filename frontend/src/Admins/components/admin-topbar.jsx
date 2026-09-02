@@ -6,6 +6,7 @@ import { useDarkMode } from '../../context/useDarkMode';
 const PAGE_TITLES = {
   '/admin': 'Dashboard',
   '/admin/queue-management': 'Queue Management',
+  '/admin/scan-qr': 'Scan QR',
   '/admin/patient-records': 'Patient Records',
   '/admin/schedule-delays': 'Schedule Management',
   '/admin/staff-management': 'Staff Management',

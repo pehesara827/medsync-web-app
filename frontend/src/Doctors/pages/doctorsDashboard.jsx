@@ -155,7 +155,7 @@ export default function DoctorDashboard() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="shrink-0 mb-4 flex items-center justify-between">
+      <div className="shrink-0 mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Today's Schedule</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">

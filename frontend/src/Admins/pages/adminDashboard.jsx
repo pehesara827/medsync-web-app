@@ -20,10 +20,24 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showNewAppointment, setShowNewAppointment] = useState(false);
+  const [walkIns, setWalkIns] = useState([]);
+
+  // Today's admin-added walk-ins (manual_appointments), shown in their own card.
+  const loadWalkIns = () => {
+    const today = new Date().toISOString().split('T')[0];
+    fetch(`${API_BASE_URL}/admin/manual-appointments?date=${today}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load walk-ins');
+        return res.json();
+      })
+      .then((data) => setWalkIns(data.appointments || []))
+      .catch(() => setWalkIns([]));
+  };
 
   const refreshDashboard = () => {
     // Re-run dashboard load after a manual appointment is created.
     setLoading(true);
+    loadWalkIns();
     fetch(`${API_BASE_URL}/admin/dashboard`)
       .then((res) => res.json())
       .then((data) => {
@@ -68,6 +82,7 @@ export default function AdminDashboard() {
     };
 
     loadDashboard();
+    loadWalkIns();
   }, []);
 
   const maxCompleted = Math.max(0, ...completedByDay.map((d) => d.count || 0));
@@ -75,7 +90,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Hospital Command Center</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -102,7 +117,7 @@ export default function AdminDashboard() {
       ) : (
         <>
           {/* Top stat cards */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {stats.map(({ id, label, value, tag, icon: Icon }) => (
               <div key={id} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
                 <div className="flex items-start justify-between">
@@ -120,7 +135,7 @@ export default function AdminDashboard() {
           {/* Completed appointments chart + Today's time slots */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Completed Appointments</h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400">Completed appointments per day this week.</p>
@@ -186,8 +201,66 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {/* Today's walk-ins (admin-added manual appointments) */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Today's Walk-ins</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Manually added appointments — counted together with online bookings.
+                </p>
+              </div>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-full whitespace-nowrap">
+                {walkIns.length} total
+              </span>
+            </div>
+
+            {walkIns.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-4">
+                No walk-ins added today.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3 mt-4 max-h-[260px] overflow-y-auto pr-1">
+                {walkIns.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center justify-between gap-3 border border-slate-100 dark:border-slate-700 rounded-lg p-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                        {w.patient_first_name} {w.patient_last_name}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {w.doctor_name || '—'}
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-md whitespace-nowrap">
+                      {w.start_time
+                        ? new Date(`2000-01-01T${w.start_time}`).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })
+                        : 'No time'}
+                    </span>
+                    <span
+                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+                        w.status === 'COMPLETED'
+                          ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400'
+                          : w.status === 'CANCELLED'
+                            ? 'text-rose-600 bg-rose-50 dark:bg-rose-500/10 dark:text-rose-400'
+                            : 'text-[#00a8cc] bg-[#e0f5f8] dark:bg-slate-700'
+                      }`}
+                    >
+                      {w.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Active Scanning */}
-          <div className="bg-[#e0f5f8] dark:bg-slate-800 rounded-xl p-5 flex items-center justify-between gap-4">
+          <div className="bg-[#e0f5f8] dark:bg-slate-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Active Scanning</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
