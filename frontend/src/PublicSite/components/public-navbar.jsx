@@ -4,7 +4,6 @@ import { NavLink, Link } from 'react-router-dom';
 const NAV_LINKS = [
   { label: 'Home', path: '/' },
   { label: 'About', path: '/about' },
-  { label: 'Services', path: '/services' },
   { label: 'Contact Us', path: '/contact' },
 ];
 
@@ -14,18 +13,18 @@ export default function Navbar() {
   const closeMenu = () => setIsOpen(false);
 
   return (
-    <header className="w-full bg-[#f4fbfd] border-b border-slate-100 px-4 sm:px-6 md:px-8 py-4 shadow-sm select-none dark:bg-slate-950 dark:border-slate-700">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-200/70 bg-[#f4fbfd]/85 px-4 py-4 shadow-sm backdrop-blur-md select-none sm:px-6 md:px-8 dark:border-slate-800 dark:bg-slate-950/85">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         
         {/* Brand / Logo */}
         <Link to="/" className="flex items-center gap-2.5 group flex-shrink-0">
-          <div className="text-[#00a8cc]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#00b8e6] to-[#007b8a] text-white shadow-sm transition-transform duration-200 group-hover:scale-105">
             {/* First-aid / Medical Briefcase Icon */}
-            <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
               <path d="M19 7h-3V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm-9-2h4v2h-4V5zm3 9h-2v2H11v-2H9v-2h2v-2h2v2h2v2z" />
             </svg>
           </div>
-          <span className="text-[#007b8a] font-bold text-xl tracking-tight">
+          <span className="text-[#007b8a] font-bold text-xl tracking-tight dark:text-slate-100">
             MedSync
           </span>
         </Link>

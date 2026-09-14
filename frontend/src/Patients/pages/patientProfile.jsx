@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { supabase } from '../../../supabaseClient';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -8,22 +8,40 @@ import {
   Phone, 
   MapPin, 
   ShieldCheck, 
-  Key, 
   Edit3, 
   Plus, 
-  Activity, 
-  AlertCircle, 
-  Heart,
+  Users,
   Camera,
   Save,
+  Trash2,
+  Loader,
   X
 } from 'lucide-react';
+
+// ── Profile picture upload ──────────────────────────────────────────────
+const AVATAR_BUCKET = 'profile-pictures';
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
+const ALLOWED_AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+/** Builds up to two uppercase initials from a person's full name. */
+const initialsOf = (name) =>
+  (name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
 export default function PatientProfile() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(null); // 'upload' | 'remove' | null
+  const fileInputRef = useRef(null);
 
   
   const [newContact, setNewContact] = useState({ name: '', relation: '', phone: '' });
@@ -108,6 +126,119 @@ export default function PatientProfile() {
     }
   };
 
+  /**
+   * Uploads the picked image, then asks the backend to store the new URL and
+   * delete the picture it replaced (so storage never keeps a stale copy).
+   * If saving fails, the freshly uploaded file is rolled back.
+   */
+  const handleAvatarSelect = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow picking the same file again later
+    if (!file) return;
+
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      alert('Please choose a PNG, JPG or WEBP image.');
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      alert('Profile pictures must be 2 MB or smaller.');
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    if (!user) {
+      alert('You must be logged in to change your profile picture.');
+      return;
+    }
+
+    setAvatarBusy('upload');
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `avatars/${user.id}_${Date.now()}_${safeName}`;
+    let uploadedPath = null;
+
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+      if (uploadError) {
+        throw new Error(`Failed to upload image: ${uploadError.message}`);
+      }
+      uploadedPath = filePath;
+
+      const { data: publicUrlData } = supabase.storage
+        .from(AVATAR_BUCKET)
+        .getPublicUrl(filePath);
+
+      const response = await axios.put(`${API_BASE_URL}/patient/profile/${user.id}/photo`, {
+        profilePictureUrl: publicUrlData.publicUrl,
+      });
+
+      const updated = response.data?.data || {};
+      setProfile((prev) => ({
+        ...prev,
+        avatarUrl: updated.avatarUrl || publicUrlData.publicUrl,
+        hasCustomAvatar: true,
+      }));
+
+      // The backend owns the file from here on — never roll it back.
+      uploadedPath = null;
+      alert('Profile picture updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile picture:', error);
+      if (uploadedPath) {
+        await supabase.storage.from(AVATAR_BUCKET).remove([uploadedPath]);
+      }
+      alert(
+        error.response?.data?.message ||
+          error.message ||
+          'Failed to update profile picture.'
+      );
+    } finally {
+      setAvatarBusy(null);
+    }
+  };
+
+  /**
+   * Deletes the stored picture and falls back to the default avatar.
+   */
+  const handleRemoveAvatar = async () => {
+    if (!window.confirm('Remove your profile picture? The uploaded image will be deleted.')) {
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    if (!user) {
+      alert('You must be logged in to remove your profile picture.');
+      return;
+    }
+
+    setAvatarBusy('remove');
+    try {
+      const response = await axios.delete(`${API_BASE_URL}/patient/profile/${user.id}/photo`);
+      const updated = response.data?.data || {};
+
+      setProfile((prev) => ({
+        ...prev,
+        avatarUrl: updated.avatarUrl || prev.avatarUrl,
+        hasCustomAvatar: false,
+      }));
+      alert('Profile picture removed successfully!');
+    } catch (error) {
+      console.error('Error removing profile picture:', error);
+      alert(
+        error.response?.data?.message ||
+          error.message ||
+          'Failed to remove profile picture.'
+      );
+    } finally {
+      setAvatarBusy(null);
+    }
+  };
+
   if (loading) return <LoadingSpinner message="Loading your profile" />;
   if (!profile) return <div className="p-8 text-center text-red-500 font-bold">Profile not found.</div>;
 
@@ -126,9 +257,40 @@ export default function PatientProfile() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <button className="absolute bottom-0 right-0 bg-[#4CD7F6] text-[#252B2D] p-2 rounded-full shadow-lg hover:bg-[#3bc0de] transition">
-                <Camera size={14} />
+              {/* The selected image is uploaded and saved straight away — the backend
+                  then deletes the previous picture so no stale file is left behind. */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleAvatarSelect}
+              />
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={avatarBusy !== null}
+                title="Change profile picture"
+                aria-label="Change profile picture"
+                className="absolute bottom-0 right-0 bg-[#4CD7F6] text-[#252B2D] p-2 rounded-full shadow-lg hover:bg-[#3bc0de] transition disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {avatarBusy === 'upload' ? <Loader size={14} className="animate-spin" /> : <Camera size={14} />}
               </button>
+
+              {/* Only offered while a real (uploaded) picture is stored */}
+              {profile.hasCustomAvatar && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  disabled={avatarBusy !== null}
+                  title="Remove profile picture"
+                  aria-label="Remove profile picture"
+                  className="absolute -top-1 -right-1 bg-white text-rose-500 border border-rose-200 p-1.5 rounded-full shadow-md hover:bg-rose-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {avatarBusy === 'remove' ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                </button>
+              )}
             </div>
 
             <div className="text-center sm:text-left space-y-1">
@@ -147,10 +309,6 @@ export default function PatientProfile() {
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            <button className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[#BCC9CD] text-[#252B2D] font-medium hover:bg-[#4CD7F6]/10 transition text-sm">
-              <Key size={16} /> Change Password
-            </button>
-
             {isEditing ? (
               <button 
                 onClick={handleSaveProfile}
@@ -283,41 +441,33 @@ export default function PatientProfile() {
             
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-5 dark:bg-slate-900 dark:border-slate-700">
               <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40">
-                <Activity className="text-[#4CD7F6]" size={20} />
-                <h2 className="text-lg font-bold text-[#252B2D]">Medical Overview</h2>
+                <Users className="text-[#4CD7F6]" size={20} />
+                <h2 className="text-lg font-bold text-[#252B2D]">Beneficiaries</h2>
               </div>
 
-              <div>
-                <span className="block text-xs font-bold text-[#3D494C] uppercase tracking-wider mb-2">
-                  <AlertCircle size={12} className="inline mr-1 text-rose-500" /> Allergies
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {profile.allergies.map((allergy, index) => (
-                    <span key={index} className="px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
-                      {allergy}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <span className="block text-xs font-bold text-[#3D494C] uppercase tracking-wider mb-2">
-                  Chronic Conditions
-                </span>
-                <div className="space-y-2">
-                  {profile.chronicConditions.map((condition) => (
-                    <div key={condition.id} className="p-3.5 rounded-xl bg-slate-50 border border-[#BCC9CD]/50 flex items-start gap-3">
-                      <div className="p-2 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 mt-0.5">
-                        <Heart size={16} />
+              {(profile.beneficiaries || []).length === 0 ? (
+                <p className="text-sm text-[#3D494C]">
+                  No family members added yet. Family members added while booking an appointment will appear here.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {(profile.beneficiaries || []).map((beneficiary) => (
+                    <div key={beneficiary.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-[#BCC9CD]/50">
+                      <div className="w-9 h-9 rounded-full bg-[#4CD7F6]/10 text-[#252B2D] flex items-center justify-center font-bold text-xs border border-[#4CD7F6]/30">
+                        {initialsOf(beneficiary.fullName)}
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-[#252B2D]">{condition.name}</h4>
-                        <p className="text-xs text-[#3D494C] mt-0.5">{condition.note}</p>
+                        <h4 className="text-sm font-semibold text-[#252B2D]">{beneficiary.fullName}</h4>
+                        <p className="text-xs text-[#3D494C]">
+                          {[beneficiary.relationship, beneficiary.age ? `${beneficiary.age} yrs` : null, beneficiary.gender]
+                            .filter(Boolean)
+                            .join(' • ')}
+                        </p>
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
 
             

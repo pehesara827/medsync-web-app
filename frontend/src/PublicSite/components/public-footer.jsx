@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { MapPin, Phone, Mail } from 'lucide-react';
 
 export default function PublicFooter() {
   return (
@@ -30,12 +31,7 @@ export default function PublicFooter() {
               </li>
               <li>
                 <Link to="/about" className="transition hover:text-white">
-                  About
-                </Link>
-              </li>
-              <li>
-                <Link to="/services" className="transition hover:text-white">
-                  Services
+                  About Us
                 </Link>
               </li>
               <li>
@@ -48,11 +44,20 @@ export default function PublicFooter() {
 
           <div>
             <p className="mb-4 text-sm uppercase tracking-[0.24em] text-slate-400">Contact</p>
-            <div className="space-y-3 text-sm text-slate-300">
-              <p>123 Health Ave, Medical District</p>
-              <p>Phone: 1-800-MED-SYNC</p>
-              <p>Email: contact@medsync.com</p>
-            </div>
+            <ul className="space-y-4 text-sm text-slate-300">
+              <li className="flex items-start gap-3">
+                <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#00a8cc]" />
+                <span>123 Health Ave, Medical District</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <Phone className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#00a8cc]" />
+                <span>1-800-MED-SYNC</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <Mail className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#00a8cc]" />
+                <span>contact@medsync.com</span>
+              </li>
+            </ul>
             <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-5">
               <p className="text-slate-200 font-semibold">Newsletter</p>
               <p className="text-slate-400 text-sm mt-2">Get updates on new health services and clinic news.</p>
@@ -62,7 +67,7 @@ export default function PublicFooter() {
                   placeholder="Email address"
                   className="min-w-0 flex-1 rounded-full border border-slate-800 bg-slate-950/90 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20"
                 />
-                <button className="rounded-full bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">
+                <button type="button" className="rounded-full bg-[#00a8cc] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0092b8]">
                   Subscribe
                 </button>
               </div>
@@ -70,8 +75,12 @@ export default function PublicFooter() {
           </div>
         </div>
 
-        <div className="border-t border-slate-800 mt-12 pt-6 text-slate-500 text-sm text-center">
-          © 2026 MedSync Healthcare Clinic. All rights reserved.
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-slate-800 pt-6 text-center text-sm text-slate-500 sm:flex-row sm:text-left">
+          <p>© 2026 MedSync Healthcare Clinic. All rights reserved.</p>
+          <div className="flex gap-6">
+            <a href="#privacy" className="transition hover:text-slate-300">Privacy Policy</a>
+            <a href="#terms" className="transition hover:text-slate-300">Terms of Service</a>
+          </div>
         </div>
       </div>
     </footer>

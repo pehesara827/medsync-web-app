@@ -58,6 +58,8 @@ export default function App() {
         {/* 1. PUBLIC ROUTES (Main Navbar) */}
         <Route path="/" element={<PublicLayout />}>
           <Route index element={<HomePage />} />
+          <Route path="about" element={<AboutPage />} />
+          <Route path="contact" element={<ContactUs />} />
         </Route>
 
         {/* Standalone login page (no navbar) */}

@@ -7,12 +7,11 @@ import NotificationPanel from './NotificationPanel';
 
 // Map route paths to your desired dynamic titles
 const PAGE_TITLES = {
-
-
   '/queue': 'Queue Management',
   '/patient': 'Welcome, Uditha',
   '/patient/appointments' : 'Manage Your Appointments Here',
   '/patient/doctors': 'Your Doctors Here',
+  '/patient/profile': 'Profile',
   '/schedule': 'Schedule Manager',
   '/staff': 'Staff Management',
   '/analytics': 'Analytics',
@@ -23,6 +22,7 @@ const PAGE_TITLES = {
 
 export default function Header({ onMenuClick }) {
   const location = useLocation();
+  const isProfileRoute = location.pathname === '/patient/profile';
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
   const settingsButtonRef = useRef(null);
@@ -32,6 +32,7 @@ export default function Header({ onMenuClick }) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [userId, setUserId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [patientName, setPatientName] = useState('');
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -46,6 +47,27 @@ export default function Header({ onMenuClick }) {
     };
     resolveUser();
   }, []);
+
+  // ── Fetch the signed-in patient's name for the profile page title ───────
+  useEffect(() => {
+    if (!isProfileRoute || !userId) return;
+
+    const fetchPatientName = async () => {
+      try {
+        const response = await fetch(`${backendUrl}/api/patient/profile/${userId}`);
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (data?.data?.fullName) {
+          setPatientName(data.data.fullName);
+        }
+      } catch (err) {
+        console.error('Failed to fetch patient name:', err);
+      }
+    };
+
+    fetchPatientName();
+  }, [isProfileRoute, userId, backendUrl]);
 
   // ── Fetch the initial unread notification count ─────────────────────────
   useEffect(() => {
@@ -149,11 +171,13 @@ export default function Header({ onMenuClick }) {
     setIsSettingsOpen((prev) => !prev);
   };
 
-  // Get current page title dynamically from route, or fallback to current path name
-  const currentTitle =
-    PAGE_TITLES[location.pathname] ||
-    location.pathname.replace('/', '').replace('-', ' ') ||
-    'Dashboard';
+  // Get the current page title from the route map, falling back to the path
+  // name. The patient profile route shows the patient's own name instead.
+  const currentTitle = isProfileRoute
+    ? patientName || PAGE_TITLES['/patient/profile']
+    : PAGE_TITLES[location.pathname] ||
+      location.pathname.replace('/', '').replace('-', ' ') ||
+      'Dashboard';
 
   return (
     <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200/80 dark:border-slate-700/80 px-4 md:px-8 py-2.5 md:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 select-none sticky top-0 z-10">

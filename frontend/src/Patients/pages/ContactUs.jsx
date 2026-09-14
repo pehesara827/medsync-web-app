@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Send, Clock } from 'lucide-react';
 import { CONTACT_INFO, OPERATING_HOURS } from "../../data/contactData";
+import Reveal from "../../PublicSite/components/reveal";
 
 export default function ContactUs() {
   const [formData, setFormData] = useState({
@@ -35,19 +36,21 @@ export default function ContactUs() {
       <main className="max-w-6xl mx-auto px-4 py-8">
         
         
-        <div className="bg-white rounded-2xl p-10 text-center shadow-sm mb-8 border border-gray-100">
-          <h1 className="text-4xl font-extrabold text-[#0D1C32] mb-3">Contact Us</h1>
-          <p className="text-[#6B7280] max-w-xl mx-auto text-sm leading-relaxed">
-            We are here to help. Reach out to the MedSync team for any inquiries, support,
-            or to schedule your next visit.
-          </p>
-        </div>
+        <Reveal>
+          <div className="bg-white rounded-2xl p-10 text-center shadow-sm mb-8 border border-gray-100">
+            <h1 className="text-4xl font-extrabold text-[#0D1C32] mb-3">Contact Us</h1>
+            <p className="text-[#6B7280] max-w-xl mx-auto text-sm leading-relaxed">
+              We are here to help. Reach out to the MedSync team for any inquiries, support,
+              or to schedule your next visit.
+            </p>
+          </div>
+        </Reveal>
 
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           
     
-          <div className="lg:col-span-2 bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+          <Reveal className="lg:col-span-2 bg-white rounded-2xl p-8 shadow-sm border border-gray-100" delay={120}>
             <h2 className="text-xl font-bold text-[#0D1C32] mb-6">Send us a message</h2>
             
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -137,33 +140,32 @@ export default function ContactUs() {
                 Send Message <Send size={16} />
               </button>
             </form>
-          </div>
+          </Reveal>
 
         
           <div className="flex flex-col gap-4">
-            {CONTACT_INFO.map((item) => {
+            {CONTACT_INFO.map((item, index) => {
               const Icon = item.icon;
               return (
-                <div
-                  key={item.id}
-                  className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4"
-                >
-                  <div className="p-3 bg-[#007b8a]/10 text-[#007b8a] rounded-full shrink-0">
-                    <Icon size={20} />
+                <Reveal key={item.id} delay={index * 120}>
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4">
+                    <div className="p-3 bg-[#007b8a]/10 text-[#007b8a] rounded-full shrink-0">
+                      <Icon size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs text-[#6B7280] font-medium block mb-0.5">{item.title}</span>
+                      <h3 className="text-sm font-bold text-[#0D1C32]">{item.value}</h3>
+                      <p className="text-xs text-[#6B7280] mt-0.5">{item.subtext}</p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-xs text-[#6B7280] font-medium block mb-0.5">{item.title}</span>
-                    <h3 className="text-sm font-bold text-[#0D1C32]">{item.value}</h3>
-                    <p className="text-xs text-[#6B7280] mt-0.5">{item.subtext}</p>
-                  </div>
-                </div>
+                </Reveal>
               );
             })}
           </div>
         </div>
 
 
-        <div className="relative w-full h-[320px] rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+        <Reveal className="relative w-full h-[320px] rounded-2xl overflow-hidden shadow-sm border border-gray-100" variant="scale">
           <iframe
             title="San Francisco Map"
             src="https://maps.google.com/maps?q=San%20Francisco%20CA&t=&z=13&ie=UTF8&iwloc=&output=embed"
@@ -189,7 +191,7 @@ export default function ContactUs() {
               ))}
             </div>
           </div>
-        </div>
+        </Reveal>
       </main>
 
     
