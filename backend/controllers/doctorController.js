@@ -36,9 +36,38 @@ const getNextAvailableSchedule = async (doctorId) => {
  * GET /api/doctors
  * Returns all approved doctors with their ratings, review counts, specialties,
  * and schedule-derived consultation fee and experience.
+ *
+ * Query params (both optional):
+ *   date      (YYYY-MM-DD) – annotate each doctor with bookable-slot info for
+ *             that day WITHOUT hiding anyone. Doctors with no slot that day
+ *             are still returned with hasSlotOnDate=false.
+ *   specialty (<name|id>)  – narrow the list to one specialty.
+ *             'All Specialties' (or omitted) = no specialty filtering.
  */
 export const getDoctors = async (req, res, next) => {
   try {
+    const { date: dateParam, specialty: specialtyParam } = req.query || {};
+
+    // ── Validate optional date (forgiving: invalid => treated as omitted) ──
+    let requestedDate = null;
+    if (typeof dateParam === 'string' && dateParam.trim() !== '') {
+      const trimmed = dateParam.trim();
+      if (
+        /^\d{4}-\d{2}-\d{2}$/.test(trimmed) &&
+        !Number.isNaN(new Date(`${trimmed}T00:00:00`).getTime())
+      ) {
+        requestedDate = trimmed;
+      }
+    }
+
+    // ── Normalize optional specialty ('All Specialties' => no filter) ──────
+    let specialtyFilter = null;
+    if (typeof specialtyParam === 'string' && specialtyParam.trim() !== '') {
+      const trimmed = specialtyParam.trim();
+      if (trimmed.toLowerCase() !== 'all specialties') {
+        specialtyFilter = trimmed;
+      }
+    }
     const { data: doctors, error } = await supabase
       .from('doctor_profiles')
       .select(
@@ -48,6 +77,7 @@ export const getDoctors = async (req, res, next) => {
         first_name,
         last_name,
         specialization,
+        specialty_id,
         experience_years,
         is_approved,
         doctor_image,
@@ -71,9 +101,51 @@ export const getDoctors = async (req, res, next) => {
       return res.status(500).json({ message: 'Failed to fetch doctors' });
     }
 
+    // ── Specialty hard filter (date never hides anyone) ────────────────
+    let filteredDoctors = doctors || [];
+    if (specialtyFilter) {
+      const normalized = specialtyFilter.toLowerCase();
+      filteredDoctors = filteredDoctors.filter((d) => {
+        const specName = Array.isArray(d.specialties)
+          ? d.specialties[0]?.name
+          : d.specialties?.name;
+        return (
+          String(d.specialty_id || '').toLowerCase() === normalized ||
+          String(specName || '').toLowerCase() === normalized ||
+          String(d.specialization || '').toLowerCase() === normalized
+        );
+      });
+    }
+
+    // ── Date annotation: one query, grouped by doctor — never filters out ─
+    // A slot counts as bookable when is_booked=false and capacity remains
+    // (current_appointment < max_patients), mirroring getNextAvailableSchedule.
+    const slotsByDoctor = {};
+    if (requestedDate) {
+      const { data: daySlots, error: dayErr } = await supabase
+        .from('doctor_schedules')
+        .select('doctor_id, start_time, is_booked, max_patients, current_appointment')
+        .eq('available_date', requestedDate)
+        .eq('is_booked', false)
+        .order('start_time', { ascending: true });
+
+      if (dayErr) {
+        console.error('Error fetching day slots for doctors:', dayErr);
+      } else {
+        for (const slot of daySlots || []) {
+          const max = slot.max_patients ?? 1;
+          const current = slot.current_appointment ?? 0;
+          if (current >= max) continue; // full — not bookable
+          if (!slotsByDoctor[slot.doctor_id]) slotsByDoctor[slot.doctor_id] = [];
+          slotsByDoctor[slot.doctor_id].push(slot);
+        }
+      }
+    }
+
     const doctorsWithDetails = await Promise.all(
-      doctors.map(async (doctor) => {
+      filteredDoctors.map(async (doctor) => {
         const schedule = await getNextAvailableSchedule(doctor.id);
+        const daySlots = requestedDate ? slotsByDoctor[doctor.id] || [] : [];
 
         return {
           ...doctor,
@@ -83,6 +155,11 @@ export const getDoctors = async (req, res, next) => {
             ? `${schedule.available_date} at ${schedule.start_time}`
             : 'Today, 2:30 PM',
           availableDate: schedule?.available_date ?? new Date().toISOString().split('T')[0],
+          // Date annotation (soft filter — frontend never hides on date)
+          slotsDate: requestedDate,
+          hasSlotOnDate: requestedDate ? daySlots.length > 0 : undefined,
+          slotsOnDate: requestedDate ? daySlots.length : undefined,
+          firstSlotTime: requestedDate ? daySlots[0]?.start_time ?? null : undefined,
         };
       })
     );

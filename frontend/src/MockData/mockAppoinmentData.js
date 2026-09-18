@@ -120,6 +120,7 @@ export const getAppointmentCounts = (appointments = MOCK_APPOINTMENTS) => {
       (a) => getDisplayStatus(a) === 'upcoming' || getDisplayStatus(a) === 'scheduled'
     ).length,
     Completed: nonWaitlist.filter((a) => getDisplayStatus(a) === 'completed').length,
+    Missed: nonWaitlist.filter((a) => getDisplayStatus(a) === 'missed').length,
     Waitlist: waitlist.length,
     Cancelled: nonWaitlist.filter((a) => getDisplayStatus(a) === 'cancelled').length,
   };

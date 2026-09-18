@@ -257,16 +257,28 @@ export const getPatientAppointments = async (req, res, next) => {
           }
         }
 
-        // Compute badge status based on date and status
+        // Compute badge status based on date and status.
+        // MISSED rows (set by the midnight sweeper) always show 'Missed'.
+        // PENDING/CONFIRMED rows past their date are also labelled 'Missed'
+        // so they disappear from the active cluster even before the sweep runs.
         let badgeStatus = appt.status;
-        if (appt.status === 'PENDING' || appt.status === 'CONFIRMED') {
+        let hasBadge = appt.status === 'PENDING' || appt.status === 'CONFIRMED';
+        if (appt.status === 'MISSED') {
+          badgeStatus = 'Missed';
+          hasBadge = false;
+        } else if (appt.status === 'PENDING' || appt.status === 'CONFIRMED') {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const apptDate = new Date(`${appt.appointment_date}T00:00:00`);
-          if (apptDate.getTime() === today.getTime()) {
+          if (Number.isNaN(apptDate.getTime())) {
+            badgeStatus = 'Scheduled';
+          } else if (apptDate.getTime() === today.getTime()) {
             badgeStatus = 'Upcoming';
           } else if (apptDate.getTime() > today.getTime()) {
             badgeStatus = 'Scheduled';
+          } else {
+            badgeStatus = 'Missed';
+            hasBadge = false;
           }
         }
 
@@ -281,7 +293,7 @@ export const getPatientAppointments = async (req, res, next) => {
           specialty: specialtyName,
           patientsAhead,
           doctorImage: doctor.doctor_image || null,
-          hasBadge: appt.status === 'PENDING' || appt.status === 'CONFIRMED',
+          hasBadge,
           createdAt: appt.created_at,
           updatedAt: appt.updated_at,
         };
@@ -320,7 +332,7 @@ export const cancelAppointment = async (req, res, next) => {
     if (error.code === 'PGRST116') {
       return res.status(404).json({ message: 'Appointment not found.' });
     }
-    if (error.code === 'ALREADY_CANCELLED') {
+    if (error.code === 'ALREADY_CANCELLED' || error.code === 'ALREADY_TERMINAL') {
       return res.status(400).json({ message: error.message });
     }
     console.error('Error cancelling appointment:', error);

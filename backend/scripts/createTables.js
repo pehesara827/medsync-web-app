@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS public.appointments (
     doctor_id UUID NOT NULL,
     schedule_id UUID NOT NULL,
     appointment_date DATE NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED')),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'MISSED')),
     qr_code_url TEXT UNIQUE DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT appointments_patient_id_fkey FOREIGN KEY (patient_id) 

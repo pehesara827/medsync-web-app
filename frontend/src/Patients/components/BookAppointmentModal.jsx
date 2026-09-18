@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, User, Calendar, CreditCard, ChevronDown, Loader2, AlertCircle, CheckCircle2, Upload, FileText, Building2, ArrowLeft, ArrowRight, Landmark, Lock, ShieldCheck, Copy, Check, Download, Camera, ExternalLink } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import AppointmentConfirmationPass from './AppointmentConfirmationPass';
@@ -634,11 +635,11 @@ export default function BookAppointmentModal({
   const isOnlineGateway = paymentMethod === 'online';
   const showNextButton = !isEditMode && (isBankTransfer || isOnlineGateway);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop with blur */}
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      {/* Backdrop with blur (covers sidebar + header) */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/55 backdrop-blur-md"
         onClick={onClose}
       ></div>
 
@@ -1462,7 +1463,9 @@ export default function BookAppointmentModal({
          />
        </div>
      </div>
-   );
+    ,
+    document.body
+  );
 }
 
 

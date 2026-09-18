@@ -10,8 +10,16 @@ export default function AppointmentsCarousel({
   const scrollContainerRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
 
-  // Sort appointments so upcoming/scheduled ones appear first in the cluster.
-  const sortedAppointments = [...appointments].sort((a, b) => {
+  // Filter out Completed/Cancelled/Missed — dashboard cluster shows only
+  // active (Upcoming / Scheduled / Pending / Confirmed / Waitlist) appointments.
+  const safeAppointments = appointments || [];
+  const filteredAppointments = safeAppointments.filter((item) => {
+    const status = (item.badgeStatus || item.status || '').toUpperCase();
+    return status !== 'COMPLETED' && status !== 'CANCELLED' && status !== 'MISSED';
+  });
+
+  // Sort active appointments so upcoming/scheduled ones appear first in the cluster.
+  const sortedAppointments = [...filteredAppointments].sort((a, b) => {
     const getDisplayStatus = (item) => item.badgeStatus || item.status;
     const priority = (item) => {
       const status = getDisplayStatus(item);
@@ -26,7 +34,7 @@ export default function AppointmentsCarousel({
   useEffect(() => {
     if (viewMode === 'list') return; // No auto-scroll in list mode
     if (isHovered) return;
-    if (!appointments || appointments.length <= 1) return;
+    if (!sortedAppointments || sortedAppointments.length <= 1) return;
 
     const interval = setInterval(() => {
       const container = scrollContainerRef.current;
@@ -45,7 +53,20 @@ export default function AppointmentsCarousel({
     }, 4000); // Transitions every 4 seconds
 
     return () => clearInterval(interval);
-  }, [isHovered, appointments, viewMode]);
+  }, [isHovered, sortedAppointments, viewMode]);
+
+  // Empty state — no active appointments left after filtering.
+  if (sortedAppointments.length === 0) {
+    return (
+      <section className="w-full overflow-hidden">
+        <div className="flex items-center justify-center py-12 px-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <p className="text-center text-slate-400 font-medium">
+            No upcoming appointments. Book your next visit.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   // ── List / Vertical mode ──────────────────────────────────────────────
   // Full-width responsive grid: 2 cards per row on desktop, 1 on mobile.

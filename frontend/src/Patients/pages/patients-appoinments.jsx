@@ -211,9 +211,14 @@ export default function PatientsAppointments() {
           : beneficiary.full_name;
       }
 
-      // Compute badge status based on date and status
+      // Compute badge status based on date and status.
+      // MISSED rows (set by the midnight sweeper) always show 'Missed'.
+      // Stale PENDING/CONFIRMED rows past their date are also labelled
+      // 'Missed' so they leave the active cluster even before the sweep runs.
       let badgeStatus = formatStatus(appt.status);
-      if (appt.status === 'PENDING' || appt.status === 'CONFIRMED') {
+      if (appt.status === 'MISSED') {
+        badgeStatus = 'Missed';
+      } else if (appt.status === 'PENDING' || appt.status === 'CONFIRMED') {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const apptDate = new Date(`${appt.appointment_date}T00:00:00`);
@@ -221,6 +226,8 @@ export default function PatientsAppointments() {
           badgeStatus = 'Upcoming';
         } else if (apptDate.getTime() > today.getTime()) {
           badgeStatus = 'Scheduled';
+        } else {
+          badgeStatus = 'Missed';
         }
       }
 
@@ -337,8 +344,12 @@ export default function PatientsAppointments() {
         throw new Error(errData.message || `Failed to cancel appointment (${response.status})`);
       }
 
-      // Remove the cancelled appointment from the local list
-      setAppointments((prev) => prev.filter((a) => a.id !== appointment.id));
+      // Keep the cancelled appointment in the local list with CANCELLED status
+      // so it appears under the "Cancelled" filter tab and (on the dashboard)
+      // in the Recent Activity section with a Cancelled badge.
+      setAppointments((prev) =>
+        prev.map((a) => (a.id === appointment.id ? { ...a, status: 'CANCELLED' } : a))
+      );
       setConfirmCancel(null);
     } catch (err) {
       setCancelError(err.message);

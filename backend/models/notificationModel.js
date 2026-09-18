@@ -5,7 +5,7 @@ import { supabase } from '../supabase.js';
  *
  * @param {Object} data - Notification data
  * @param {string} data.user_id - UUID of the auth user who should receive the notification
- * @param {string} data.type - One of: 'WAITLIST_OFFER', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED', 'SESSION_DELAY', 'PAYMENT_RECEIVED', 'GENERAL'
+ * @param {string} data.type - One of: 'WAITLIST_OFFER', 'WAITLIST_EXPIRED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED', 'APPOINTMENT_MISSED', 'SESSION_DELAY', 'PAYMENT_RECEIVED', 'GENERAL'
  * @param {string} data.title - Short title for the notification
  * @param {string} data.message - Full notification message
  * @param {string|undefined} data.action_link - Optional link to navigate to when clicked

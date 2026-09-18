@@ -1096,12 +1096,13 @@ const resolvePatientStatusFilter = (raw) => {
     PENDING: ['PENDING', 'CONFIRMED'],
     COMPLETED: ['COMPLETED'],
     CANCELLED: ['CANCELLED'],
+    MISSED: ['MISSED'],
   };
 
   if (!buckets[value]) {
     return {
       error: {
-        message: 'Invalid status filter. Expected one of: pending, completed, cancelled.',
+        message: 'Invalid status filter. Expected one of: pending, completed, cancelled, missed.',
       },
     };
   }
@@ -1628,7 +1629,9 @@ const isValidAppointmentUuid = (value) => {
  *   - Beneficiary (for BENEFICIARY bookings) — name + relationship on top of
  *     the account holder's profile photo
  *   - Doctor schedule (date + time window) and doctor profile (name + specialty)
- *   - Payments (method + status)
+ *   - Payments (method + status) — the linked `payments` row is the single
+ *     source of truth for the status; `appointments.payment_status` is only a
+ *     legacy mirror and cannot represent PENDING_SLIP_VERIFICATION.
  *
  * Queue number is NOT a stored column — it is derived positionally from the
  * appointment's created_at order within its schedule, matching the existing
@@ -1739,6 +1742,12 @@ export const getScannedAppointment = async (req, res, next) => {
     const schedule = appointment.doctor_schedules || {};
     const doctor = appointment.doctor_profiles || {};
 
+    // `payments.appointment_id` is UNIQUE, so PostgREST resolves this embed to a
+    // single object; the array branch is defensive insurance only.
+    const paymentRow = Array.isArray(appointment.payments)
+      ? appointment.payments[0]
+      : appointment.payments;
+
     res.json({
       success: true,
       data: {
@@ -1771,9 +1780,12 @@ export const getScannedAppointment = async (req, res, next) => {
             image: doctor.doctor_image || null,
           },
           payment: {
-            method: appointment.payments?.payment_method || '',
-            status: appointment.payment_status || appointment.payments?.payment_status || 'UNPAID',
-            amount: appointment.payments?.amount ?? null,
+            method: paymentRow?.payment_method || '',
+            // Read the status from the payments table — it is what the Payments
+            // page, dashboard, queue and patient views all use, and unlike
+            // appointments.payment_status it can hold PENDING_SLIP_VERIFICATION.
+            status: paymentRow?.payment_status || appointment.payment_status || 'UNPAID',
+            amount: paymentRow?.amount ?? null,
           },
         },
       },
@@ -1786,14 +1798,24 @@ export const getScannedAppointment = async (req, res, next) => {
 
 /**
  * POST /api/admin/scan/:appointmentId/confirm
- * Confirms a verified, on-desk appointment from the "Scan QR" page:
- *   - appointments.status         -> 'COMPLETED'
- *   - appointments.payment_status -> 'PAID'  (new column, added by migration)
- *   - linked payments.payment_status -> 'PAID' + paid_at (keeps the rest of the
- *     app consistent for the same appointment)
+ * Confirms a verified, on-desk appointment from the "Scan QR" page.
  *
- * Only PENDING/CONFIRMED appointments can be confirmed (avoids re-triggering
- * the change for already-completed or cancelled bookings).
+ * The linked `payments` row is the single source of truth for the payment
+ * status, so it is updated FIRST (mirroring the Payments page's
+ * collect-reception flow) and its value is what we report back:
+ *   - payments.payment_status     -> 'PAID' + paid_at   (throws on failure)
+ *   - appointments.status         -> 'COMPLETED'
+ *   - appointments.payment_status -> 'PAID'  (legacy mirror, kept in sync)
+ *
+ * Body: { verifiedSlip?: boolean }
+ * A payment still sitting in PENDING_SLIP_VERIFICATION is only released when the
+ * admin explicitly ticks the "I verified the bank slip" confirmation, sent as
+ * `verifiedSlip: true`. Otherwise the request is rejected with
+ * code 'SLIP_NOT_VERIFIED' so a slip can never be silently approved.
+ *
+ * CANCELLED / MISSED appointments are refused. An already-COMPLETED appointment
+ * is NOT refused: Queue Management completes visits without touching payments,
+ * so the desk still has to be able to collect the outstanding payment.
  */
 export const confirmScannedAppointment = async (req, res, next) => {
   try {
@@ -1804,10 +1826,17 @@ export const confirmScannedAppointment = async (req, res, next) => {
         .json({ success: false, message: 'Invalid appointment ID.' });
     }
 
-    // 1. Fetch the appointment to inspect its current status.
+    const verifiedSlip = req.body?.verifiedSlip === true;
+
+    // 1. Fetch the appointment plus its (unique) payment row.
     const { data: appointment, error } = await supabase
       .from('appointments')
-      .select('id, status')
+      .select(
+        `id,
+        status,
+        payment_status,
+        payments ( id, payment_status, payment_method, amount )`,
+      )
       .eq('id', appointmentId)
       .maybeSingle();
 
@@ -1818,18 +1847,49 @@ export const confirmScannedAppointment = async (req, res, next) => {
         .json({ success: false, message: 'Appointment not found for the scanned QR code.' });
     }
 
-    if (appointment.status === 'COMPLETED') {
-      return res
-        .status(409)
-        .json({ success: false, message: 'Appointment is already completed.' });
-    }
     if (appointment.status === 'CANCELLED') {
       return res
         .status(409)
         .json({ success: false, message: 'Cannot confirm a cancelled appointment.' });
     }
+    if (appointment.status === 'MISSED') {
+      return res
+        .status(409)
+        .json({ success: false, message: 'Cannot confirm a missed appointment. Please book a new visit.' });
+    }
 
-    // 2. Mark the appointment COMPLETED + its payment PAID.
+    const paymentRow = Array.isArray(appointment.payments)
+      ? appointment.payments[0]
+      : appointment.payments;
+
+    // 2. A pending bank slip requires an explicit "I verified the bank slip" tick.
+    if (paymentRow?.payment_status === 'PENDING_SLIP_VERIFICATION' && !verifiedSlip) {
+      return res.status(400).json({
+        success: false,
+        code: 'SLIP_NOT_VERIFIED',
+        message:
+          "This bank slip is still pending verification. Tick 'I verified the bank slip' to mark it as Paid, or approve/reject it from the Payments page.",
+      });
+    }
+
+    // 3. Collect the payment on the authoritative row first — if this fails the
+    //    visit stays un-confirmed, so the admin can safely retry. An already-PAID
+    //    payment is left untouched so its original paid_at is preserved (the desk
+    //    may only be completing the visit here).
+    let paymentStatus = paymentRow?.payment_status || 'PAID';
+    if (paymentRow?.id && paymentRow.payment_status !== 'PAID') {
+      const { data: updatedPayment, error: payErr } = await supabase
+        .from('payments')
+        .update({ payment_status: 'PAID', paid_at: new Date().toISOString() })
+        .eq('id', paymentRow.id)
+        .select('payment_status')
+        .maybeSingle();
+
+      if (payErr) throw payErr;
+      if (updatedPayment?.payment_status) paymentStatus = updatedPayment.payment_status;
+    }
+
+    // 4. Complete the visit and keep the legacy mirror column in sync.
     const { data: updated, error: updateError } = await supabase
       .from('appointments')
       .update({ status: 'COMPLETED', payment_status: 'PAID' })
@@ -1839,18 +1899,19 @@ export const confirmScannedAppointment = async (req, res, next) => {
 
     if (updateError) throw updateError;
 
-    // 3. Keep the linked payments row in sync (best effort).
-    const { error: payErr } = await supabase
-      .from('payments')
-      .update({ payment_status: 'PAID', paid_at: new Date().toISOString() })
-      .eq('appointment_id', appointmentId);
-    if (payErr) {
-      console.warn('Could not update linked payment row:', payErr.message);
-    }
-
     res.json({
       success: true,
-      data: { appointment: updated },
+      data: {
+        appointment: {
+          id: updated?.id || appointmentId,
+          status: updated?.status || 'COMPLETED',
+          // The true status, read back from the payments table.
+          payment_status: paymentRow?.id ? paymentStatus : 'PAID',
+          payment_method: paymentRow?.payment_method || '',
+          payment_amount: paymentRow?.amount ?? null,
+          alreadyCompleted: appointment.status === 'COMPLETED',
+        },
+      },
     });
   } catch (error) {
     console.error('Error in confirmScannedAppointment:', error);

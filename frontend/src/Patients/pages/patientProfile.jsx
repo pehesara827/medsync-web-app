@@ -15,6 +15,11 @@ import {
   Save,
   Trash2,
   Loader,
+  Lock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Send,
   X
 } from 'lucide-react';
 
@@ -42,6 +47,16 @@ export default function PatientProfile() {
   const [showContactModal, setShowContactModal] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(null); // 'upload' | 'remove' | null
   const fileInputRef = useRef(null);
+
+  // ── Reset / change password modal state ──────────────────────────────────
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState('');
+  const [resetSending, setResetSending] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   
   const [newContact, setNewContact] = useState({ name: '', relation: '', phone: '' });
@@ -239,6 +254,120 @@ export default function PatientProfile() {
     }
   };
 
+  /** Reset the password modal to its pristine state. */
+  const openPasswordModal = () => {
+    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setShowPw({ current: false, next: false, confirm: false });
+    setPwError('');
+    setPwSuccess('');
+    setResetSent(false);
+    setShowPasswordModal(true);
+  };
+
+  const closePasswordModal = () => {
+    if (pwLoading || resetSending) return;
+    setShowPasswordModal(false);
+  };
+
+  const handlePasswordInput = (e) => {
+    const { name, value } = e.target;
+    setPasswordForm((prev) => ({ ...prev, [name]: value }));
+    if (pwError) setPwError('');
+    if (pwSuccess) setPwSuccess('');
+  };
+
+  /**
+   * Change password for the logged-in patient.
+   * Supabase has no "verify current password" API, so the current password is
+   * confirmed by re-signing in, then the new password is applied with
+   * `supabase.auth.updateUser` which requires an active session.
+   */
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwError('');
+    setPwSuccess('');
+
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPwError('Please fill in all password fields.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPwError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('New passwords do not match.');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPwError('New password must be different from the current password.');
+      return;
+    }
+    if (!profile?.email) {
+      setPwError('No account email found on this profile. Please contact support.');
+      return;
+    }
+
+    setPwLoading(true);
+    try {
+      // 1. Verify the current password by re-authenticating.
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: currentPassword,
+      });
+      if (signInError) {
+        setPwError('Current password is incorrect.');
+        return;
+      }
+
+      // 2. Apply the new password on the active session.
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (updateError) throw updateError;
+
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setPwSuccess('Password updated successfully!');
+    } catch (error) {
+      console.error('Error changing password:', error);
+      setPwError(error.message || 'Failed to update password. Please try again.');
+    } finally {
+      setPwLoading(false);
+    }
+  };
+
+  /**
+   * Send a Supabase password-reset email to the address on this profile.
+   * The link redirects back to the login page (allow-list it under
+   * Supabase Dashboard → Authentication → URL Configuration).
+   */
+  const handleSendResetEmail = async () => {
+    setPwError('');
+    setPwSuccess('');
+
+    if (!profile?.email) {
+      setPwError('No account email found on this profile. Please contact support.');
+      return;
+    }
+
+    setResetSending(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+      setPwSuccess(`Password reset link sent to ${profile.email}. Check your inbox.`);
+    } catch (error) {
+      console.error('Error sending reset email:', error);
+      setPwError(error.message || 'Failed to send reset email. Please try again.');
+    } finally {
+      setResetSending(false);
+    }
+  };
+
   if (loading) return <LoadingSpinner message="Loading your profile" />;
   if (!profile) return <div className="p-8 text-center text-red-500 font-bold">Profile not found.</div>;
 
@@ -278,8 +407,8 @@ export default function PatientProfile() {
                 {avatarBusy === 'upload' ? <Loader size={14} className="animate-spin" /> : <Camera size={14} />}
               </button>
 
-              {/* Only offered while a real (uploaded) picture is stored */}
-              {profile.hasCustomAvatar && (
+              {/* Only offered while editing and a real (uploaded) picture is stored */}
+              {isEditing && profile.hasCustomAvatar && (
                 <button
                   type="button"
                   onClick={handleRemoveAvatar}
@@ -450,7 +579,7 @@ export default function PatientProfile() {
                   No family members added yet. Family members added while booking an appointment will appear here.
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                   {(profile.beneficiaries || []).map((beneficiary) => (
                     <div key={beneficiary.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-[#BCC9CD]/50">
                       <div className="w-9 h-9 rounded-full bg-[#4CD7F6]/10 text-[#252B2D] flex items-center justify-center font-bold text-xs border border-[#4CD7F6]/30">
@@ -504,6 +633,35 @@ export default function PatientProfile() {
               </button>
             </div>
 
+            {/* Security — reset / change password */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-4 dark:bg-slate-900 dark:border-slate-700">
+              <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40">
+                <ShieldCheck className="text-[#4CD7F6]" size={20} />
+                <h2 className="text-lg font-bold text-[#252B2D] dark:text-slate-100">Security</h2>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-[#BCC9CD]/50 dark:bg-slate-800 dark:border-slate-700">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-[#4CD7F6]/10 text-[#252B2D] dark:text-slate-100 flex items-center justify-center border border-[#4CD7F6]/30 flex-shrink-0">
+                    <Lock size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-semibold text-[#252B2D] dark:text-slate-100">Password</h4>
+                    <p className="text-xs text-[#3D494C] dark:text-slate-400 truncate">{profile.email || 'No account email'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={openPasswordModal}
+                  className="flex-shrink-0 px-3 py-2 rounded-lg bg-[#4CD7F6] text-[#252B2D] text-xs font-bold hover:bg-[#3BC5E8] transition flex items-center gap-1.5"
+                >
+                  <KeyRound size={13} /> Reset Password
+                </button>
+              </div>
+              <p className="text-[11px] leading-relaxed text-[#3D494C] dark:text-slate-400">
+                Change your password while logged in, or send yourself a reset link by email.
+              </p>
+            </div>
+
           </div>
         </div>
 
@@ -552,6 +710,106 @@ export default function PatientProfile() {
                   <button type="submit" className="px-4 py-2 rounded-lg bg-[#4CD7F6] text-[#252B2D] font-bold text-sm">Save Contact</button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {showPasswordModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 border border-[#BCC9CD] dark:bg-slate-900 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center pb-2 border-b border-[#BCC9CD]/40 dark:border-slate-700">
+                <h3 className="font-bold text-lg text-[#252B2D] dark:text-slate-100 flex items-center gap-2">
+                  <KeyRound size={18} className="text-[#4CD7F6]" /> Reset Password
+                </h3>
+                <button
+                  onClick={closePasswordModal}
+                  disabled={pwLoading || resetSending}
+                  className="text-[#3D494C] dark:text-slate-400 hover:text-[#252B2D] disabled:opacity-50"
+                  aria-label="Close password dialog"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {pwError && (
+                <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">
+                  {pwError}
+                </div>
+              )}
+              {pwSuccess && (
+                <div className="px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300">
+                  {pwSuccess}
+                </div>
+              )}
+
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                <p className="text-xs font-bold text-[#252B2D] dark:text-slate-100 uppercase tracking-wide">
+                  Change password
+                </p>
+                {[
+                  { key: 'currentPassword', label: 'Current Password', flag: 'current', autoComplete: 'current-password' },
+                  { key: 'newPassword', label: 'New Password (min. 6 characters)', flag: 'next', autoComplete: 'new-password' },
+                  { key: 'confirmPassword', label: 'Confirm New Password', flag: 'confirm', autoComplete: 'new-password' },
+                ].map((field) => (
+                  <div key={field.key}>
+                    <label className="text-xs font-semibold text-[#3D494C] dark:text-slate-300">{field.label}</label>
+                    <div className="relative mt-1">
+                      <input
+                        type={showPw[field.flag] ? 'text' : 'password'}
+                        name={field.key}
+                        required
+                        autoComplete={field.autoComplete}
+                        value={passwordForm[field.key]}
+                        onChange={handlePasswordInput}
+                        className="w-full px-3 py-2 pr-10 rounded-lg border border-[#BCC9CD] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPw((prev) => ({ ...prev, [field.flag]: !prev[field.flag] }))}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#3D494C] dark:text-slate-400"
+                        aria-label={showPw[field.flag] ? `Hide ${field.label}` : `Show ${field.label}`}
+                      >
+                        {showPw[field.flag] ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="submit"
+                  disabled={pwLoading}
+                  className="w-full py-2.5 rounded-xl bg-[#4CD7F6] text-[#252B2D] font-bold text-sm hover:bg-[#3BC5E8] disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
+                >
+                  {pwLoading ? <><Loader size={15} className="animate-spin" /> Updating…</> : 'Update Password'}
+                </button>
+              </form>
+
+              <div className="flex items-center gap-3" data-pw-divider>
+                <span className="flex-1 h-px bg-[#BCC9CD]/60 dark:bg-slate-700" />
+                <span className="text-[11px] font-semibold text-[#3D494C] dark:text-slate-400 uppercase">or</span>
+                <span className="flex-1 h-px bg-[#BCC9CD]/60 dark:bg-slate-700" />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-[#252B2D] dark:text-slate-100 uppercase tracking-wide">
+                  Forgot current password?
+                </p>
+                <p className="text-xs text-[#3D494C] dark:text-slate-400 leading-relaxed">
+                  We will email a reset link to{' '}
+                  <span className="font-semibold text-[#252B2D] dark:text-slate-200">{profile.email || 'your account email'}</span>.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSendResetEmail}
+                  disabled={resetSending || resetSent}
+                  className="w-full py-2.5 rounded-xl border border-[#4CD7F6] text-[#252B2D] dark:text-slate-100 font-bold text-sm hover:bg-[#4CD7F6]/10 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
+                >
+                  {resetSending
+                    ? <><Loader size={15} className="animate-spin" /> Sending…</>
+                    : resetSent
+                      ? <><Send size={15} /> Reset Link Sent — Check Inbox</>
+                      : <><Send size={15} /> Send Reset Link</>}
+                </button>
+              </div>
             </div>
           </div>
         )}

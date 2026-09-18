@@ -5,6 +5,7 @@ import {
   generateQRPayload,
 } from '../utils/qrUtils.js';
 import { notifyNextPatient } from './waitlistModel.js';
+import { createNotification } from './notificationModel.js';
 
 /**
  * Creates a new appointment with associated payment record and QR code.
@@ -252,7 +253,8 @@ export const getPatientsAhead = async (appointmentId, doctorId, appointmentDate,
 
 /**
  * Retrieves all appointments for a specific patient (account owner).
- * Includes both SELF and BENEFICIARY bookings.
+ * Includes both SELF and BENEFICIARY bookings, INCLUDING CANCELLED ones
+ * (needed for the "Cancelled" filter tab and the dashboard Recent Activity).
  *
  * @param {string} patientId - UUID of the patient profile
  * @returns {Promise<Array>} Array of appointment objects
@@ -294,7 +296,10 @@ export const getAppointmentsByPatient = async (patientId) => {
     `
     )
     .eq('patient_id', patientId)
-    .neq('status', 'CANCELLED')
+    // NOTE: CANCELLED appointments are intentionally INCLUDED so the
+    // dashboard's Recent Activity section can show recently-cancelled
+    // bookings with a "Cancelled" badge. Consumers that only want active
+    // appointments (carousel, stats) filter them out client-side.
     .order('updated_at', { ascending: false })
     .order('appointment_date', { ascending: false })
     .order('created_at', { ascending: false });
@@ -321,17 +326,26 @@ export const cancelAppointment = async (appointmentId) => {
 
   if (fetchError) throw fetchError;
 
-  // Prevent cancelling an already-cancelled appointment
+  // Prevent cancelling a terminal appointment (already cancelled / completed / missed)
   if (appointment.status === 'CANCELLED') {
     const err = new Error('Appointment is already cancelled.');
     err.code = 'ALREADY_CANCELLED';
     throw err;
   }
+  if (appointment.status === 'COMPLETED' || appointment.status === 'MISSED') {
+    const err = new Error(`Cannot cancel an appointment that is already ${appointment.status}.`);
+    err.code = 'ALREADY_TERMINAL';
+    throw err;
+  }
 
-  // Update appointment status to CANCELLED
+  // Update appointment status to CANCELLED.
+  // updated_at is set explicitly (the trg_appointments_updated_at trigger
+  // also maintains it, but setting it here keeps behaviour correct even
+  // if the trigger hasn't been applied in an environment). A fresh
+  // updated_at is what makes the row surface in Recent Activity.
   const { data: updatedAppt, error: cancelError } = await supabase
     .from('appointments')
-    .update({ status: 'CANCELLED' })
+    .update({ status: 'CANCELLED', updated_at: new Date().toISOString() })
     .eq('id', appointmentId)
     .select()
     .single();
@@ -477,4 +491,94 @@ export const updateAppointment = async (appointmentId, updateData) => {
   const fullAppointment = await getAppointmentById(updatedAppt.id);
 
   return fullAppointment;
+};
+
+/**
+ * Marks past-due appointments as MISSED and notifies each patient.
+ *
+ * Rule (next-day midnight): any appointment still in PENDING/CONFIRMED
+ * whose appointment_date is before TODAY is a no-show. The sweep:
+ *   1. Selects those rows (joined with patient user_id + doctor/schedule
+ *      labels for the notification message).
+ *   2. Batch-updates them to status='MISSED' with a fresh updated_at so
+ *      they surface in Recent Activity with a "Missed" badge.
+ *   3. Sends one APPOINTMENT_MISSED in-app notification per patient.
+ *
+ * Idempotent: only PENDING/CONFIRMED rows match, so reruns and overlapping
+ * scheduler ticks never double-mark or double-notify.
+ *
+ * @returns {Promise<number>} Number of appointments marked MISSED
+ */
+export const markMissedAppointments = async () => {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
+  const { data: overdue, error: fetchError } = await supabase
+    .from('appointments')
+    .select(
+      `
+      id,
+      appointment_date,
+      patient_profiles ( user_id, first_name, last_name ),
+      doctor_profiles ( first_name, last_name ),
+      doctor_schedules ( start_time, end_time )
+    `
+    )
+    .in('status', ['PENDING', 'CONFIRMED'])
+    .lt('appointment_date', todayStr);
+
+  if (fetchError) throw fetchError;
+  if (!overdue || overdue.length === 0) return 0;
+
+  const ids = overdue.map((a) => a.id);
+  const { error: updateError } = await supabase
+    .from('appointments')
+    .update({ status: 'MISSED', updated_at: new Date().toISOString() })
+    .in('id', ids)
+    .in('status', ['PENDING', 'CONFIRMED']);
+
+  if (updateError) throw updateError;
+
+  const formatTimeLabel = (t) => {
+    if (!t) return '';
+    const [h, m] = t.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return t;
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+  };
+
+  let marked = 0;
+  for (const appt of overdue) {
+    marked += 1;
+    try {
+      const userId = appt.patient_profiles?.user_id;
+      if (!userId) continue;
+      const doctorName =
+        `Dr. ${appt.doctor_profiles?.first_name || ''} ${appt.doctor_profiles?.last_name || ''}`.trim() ||
+        'your doctor';
+      const timeLabel = formatTimeLabel(appt.doctor_schedules?.start_time);
+      await createNotification({
+        user_id: userId,
+        type: 'APPOINTMENT_MISSED',
+        title: 'You missed your appointment',
+        message: `You missed your appointment with ${doctorName} on ${appt.appointment_date}${timeLabel ? ` at ${timeLabel}` : ''}. Please book a new visit.`,
+        action_link: '/patient/appointments',
+        metadata: {
+          appointment_id: appt.id,
+          appointment_date: appt.appointment_date,
+        },
+      });
+    } catch (notifError) {
+      console.error(`[MissedSweep] Notification failed for appointment ${appt.id}:`, notifError.message);
+    }
+  }
+
+  if (marked > 0) {
+    console.log(`[MissedSweep] Marked ${marked} appointment(s) as MISSED.`);
+  }
+  return marked;
 };

@@ -417,17 +417,24 @@ export const broadcastSessionDelay = async (req, res, next) => {
 
 /**
  * GET /api/admin/schedules/all
- * Returns ALL doctor schedules (not just today's dashboard slots) together with
- * the doctor's name/specialty and a computed capacity ratio
- * (current_appointment / max_patients) plus delay status fields.
+ * Returns today + upcoming doctor schedules (past days are excluded by
+ * default) together with the doctor's name/specialty and a computed
+ * capacity ratio (current_appointment / max_patients) plus delay status
+ * fields.
  *
  * Optional query params:
- *   doctor_id  – filter by a specific doctor
- *   date       – filter to a single available_date (YYYY-MM-DD)
+ *   doctor_id    – filter by a specific doctor
+ *   date         – filter to a single available_date (YYYY-MM-DD)
+ *   include_past – 'true' to also return past schedules (default: false)
  */
 export const getAdminScheduleList = async (req, res, next) => {
   try {
-    const { doctor_id, date } = req.query;
+    const { doctor_id, date, include_past } = req.query;
+    const includePast =
+      include_past === true || include_past === 'true' || include_past === '1';
+    // Server-side today (YYYY-MM-DD) so "upcoming" is always real today,
+    // never a hardcoded date.
+    const todayStr = new Date().toISOString().slice(0, 10);
 
     let query = supabase
       .from('doctor_schedules')
@@ -471,6 +478,9 @@ export const getAdminScheduleList = async (req, res, next) => {
         });
       }
       query = query.eq('available_date', date);
+    } else if (!includePast) {
+      // Default: only today + future schedules.
+      query = query.gte('available_date', todayStr);
     }
 
     const { data: schedules, error } = await query;
@@ -623,8 +633,9 @@ export const emergencyCancelSchedule = async (req, res, next) => {
 
     if (schedError) throw schedError;
 
-    // 3. Find active (non-cancelled) appointments for this schedule.
+    // 3. Find active (PENDING/CONFIRMED) appointments for this schedule.
     //    Join patient_profiles to grab each patient's user_id for notifications.
+    //    COMPLETED / MISSED / CANCELLED rows are terminal and are left untouched.
     const { data: appointments, error: apptsError } = await supabase
       .from('appointments')
       .select(
@@ -632,7 +643,7 @@ export const emergencyCancelSchedule = async (req, res, next) => {
         patient_profiles ( user_id, first_name, last_name )`
       )
       .eq('schedule_id', scheduleId)
-      .neq('status', 'CANCELLED');
+      .in('status', ['PENDING', 'CONFIRMED']);
 
     if (apptsError) throw apptsError;
 

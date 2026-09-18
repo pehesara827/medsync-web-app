@@ -7,9 +7,18 @@
 // detail card.
 //
 // Scanner is powered by `html5-qrcode` (rear camera + optional file upload).
+// File scans run through a normalise-and-retry pipeline (see decodeQrFromImageFile)
+// because html5-qrcode's bundled ZXing reader runs with the TRY_HARDER hint
+// disabled and otherwise throws "No MultiFormat Readers were able to detect the
+// code." on un-processed photos/screenshots.
 // Detail data comes from GET /api/admin/scan/:appointmentId (adminScanApi.js).
+// The payment status shown in the detail card is read from the `payments` table
+// (the single source of truth). Confirming collects the payment there first and
+// completes the visit afterwards; a bank slip still in
+// PENDING_SLIP_VERIFICATION has to be explicitly released with the
+// "I verified the bank slip" tick.
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   ScanLine,
   UserRound,
@@ -44,6 +53,7 @@ const STATUS_STYLES = {
   CONFIRMED: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400',
   COMPLETED: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
   CANCELLED: 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400',
+  MISSED: 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400',
 };
 
 const STATUS_LABELS = {
@@ -51,6 +61,7 @@ const STATUS_LABELS = {
   CONFIRMED: 'Confirmed',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
+  MISSED: 'Missed',
 };
 
 // Payment-status highlight styles (card) and badge styles.
@@ -113,6 +124,237 @@ function parsePayload(text) {
 }
 
 // -----------------------------------------------
+// File-scan pipeline
+//
+// `html5-qrcode`'s `scanFile()` feeds the picked image straight to ZXing's
+// `MultiFormatReader`, which is built with the `TRY_HARDER` hint hard-coded to
+// `false` (see node_modules/html5-qrcode/src/zxing-html5-qrcode-decoder.ts).
+// A single un-processed camera-roll photo or full-screen screenshot therefore
+// fails with "No MultiFormat Readers were able to detect the code.".
+//
+// We compensate by normalising the image off-screen (downscale / grayscale /
+// contrast boost / upscale) and retrying every variant until one decodes.
+// -----------------------------------------------
+
+// Long-edge caps for the retry variants: big photos are downscaled so ZXing's
+// global binarizer can resolve the modules again, tiny ones are upscaled.
+const SCAN_VARIANT_MAX_LONG_EDGE = 1600;
+const SCAN_RETRY_MAX_LONG_EDGE = 1000;
+const SCAN_UPSCALE_MAX_LONG_EDGE = 600;
+
+// QR-only decoding: skipping the other 16 ZXing readers keeps scans fast.
+const QR_ONLY_FORMATS = [Html5QrcodeSupportedFormats.QR_CODE];
+
+const CAMERA_SCAN_OPTIONS = {
+  verbose: false,
+  formatsToSupport: QR_ONLY_FORMATS,
+  useBarCodeDetectorIfSupported: true,
+};
+
+const FILE_SCAN_OPTIONS = {
+  verbose: false,
+  formatsToSupport: QR_ONLY_FORMATS,
+};
+
+const scaleToFit = (width, height, maxLongEdge) => {
+  const longest = Math.max(width, height);
+  return longest > 0 ? Math.min(1, maxLongEdge / longest) : 1;
+};
+
+/** Decodes a picked image File into a drawable source plus its natural size. */
+async function loadImageFile(file) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file);
+      return {
+        source: bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        release: () => {
+          if (bitmap.close) bitmap.close();
+        },
+      };
+    } catch {
+      /* fall back to the <img> based loader below */
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error('Could not decode that image file.'));
+      element.src = objectUrl;
+    });
+    return {
+      source: image,
+      width: image.naturalWidth || image.width,
+      height: image.naturalHeight || image.height,
+      release: () => URL.revokeObjectURL(objectUrl),
+    };
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+}
+
+/** Rasterises the decoded image into a PNG File that `scanFile()` can consume. */
+async function rasterizeToPngFile(image, scale, filter) {
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  // A white quiet zone helps the binarizer locate the finder patterns.
+  const padding = Math.max(8, Math.round(Math.min(width, height) * 0.04));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width + padding * 2;
+  canvas.height = height + padding * 2;
+
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Unable to get 2d context from canvas.');
+
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  if (filter) context.filter = filter;
+  context.drawImage(image.source, padding, padding, width, height);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('Could not rasterize that image file.');
+
+  return new File([blob], 'medsync-scan-variant.png', { type: 'image/png' });
+}
+
+/** Builds the ordered list of image variants we will attempt to decode. */
+async function buildFileScanCandidates(file) {
+  const image = await loadImageFile(file);
+  try {
+    const { width, height } = image;
+
+    const variants = [
+      {
+        label: `fit ${SCAN_VARIANT_MAX_LONG_EDGE}px`,
+        scale: scaleToFit(width, height, SCAN_VARIANT_MAX_LONG_EDGE),
+        filter: null,
+      },
+      {
+        label: `fit ${SCAN_RETRY_MAX_LONG_EDGE}px`,
+        scale: scaleToFit(width, height, SCAN_RETRY_MAX_LONG_EDGE),
+        filter: null,
+      },
+      {
+        label: `fit ${SCAN_RETRY_MAX_LONG_EDGE}px grayscale`,
+        scale: scaleToFit(width, height, SCAN_RETRY_MAX_LONG_EDGE),
+        filter: 'grayscale(1) contrast(1.6)',
+      },
+      {
+        label: `fit ${SCAN_RETRY_MAX_LONG_EDGE}px binarized`,
+        scale: scaleToFit(width, height, SCAN_RETRY_MAX_LONG_EDGE),
+        filter: 'grayscale(1) contrast(3) brightness(1.05)',
+      },
+    ];
+
+    // Pass screenshots are often only a few hundred pixels wide; upscaling
+    // gives ZXing more pixels to sample per module.
+    if (Math.max(width, height) < SCAN_UPSCALE_MAX_LONG_EDGE) {
+      variants.push({
+        label: 'upscaled 2x',
+        scale: 2,
+        filter: 'grayscale(1) contrast(1.4)',
+      });
+    }
+
+    // The untouched file is tried first so behaviour that already worked cannot
+    // regress; `seen` de-duplicates variants that rasterise to the same image.
+    const candidates = [{ label: 'original', file }];
+    const seen = new Set(['1|']);
+    for (const variant of variants) {
+      const key = `${variant.scale}|${variant.filter || ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push({
+        label: variant.label,
+        file: await rasterizeToPngFile(image, variant.scale, variant.filter),
+      });
+    }
+    return candidates;
+  } finally {
+    image.release();
+  }
+}
+
+/** Decodes one candidate with the native BarcodeDetector, when available. */
+async function decodeWithNativeDetector(file) {
+  if (
+    typeof createImageBitmap !== 'function' ||
+    typeof window === 'undefined' ||
+    !('BarcodeDetector' in window)
+  ) {
+    return null;
+  }
+
+  const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+  const bitmap = await createImageBitmap(file);
+  try {
+    const results = await detector.detect(bitmap);
+    const first = results && results[0];
+    return first && first.rawValue ? first.rawValue : null;
+  } finally {
+    if (bitmap.close) bitmap.close();
+  }
+}
+
+/** Decodes one candidate with html5-qrcode (ZXing under the hood). */
+async function decodeWithHtml5Qrcode(file) {
+  const scanner = new Html5Qrcode(SCANNER_ID, FILE_SCAN_OPTIONS);
+  try {
+    return await scanner.scanFile(file, false);
+  } finally {
+    try {
+      scanner.clear();
+    } catch {
+      /* the shared scanner element was already reset */
+    }
+  }
+}
+
+/**
+ * Decodes a QR code from a picked image file, trying every normalised variant
+ * before giving up. Resolves with the decoded text or rejects when no variant
+ * contained a readable QR code.
+ */
+async function decodeQrFromImageFile(file) {
+  const candidates = await buildFileScanCandidates(file);
+  const failures = [];
+
+  for (const candidate of candidates) {
+    try {
+      const nativeText = await decodeWithNativeDetector(candidate.file);
+      if (nativeText) return nativeText;
+    } catch (error) {
+      failures.push(error);
+    }
+
+    try {
+      const text = await decodeWithHtml5Qrcode(candidate.file);
+      if (text) return text;
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+
+  console.warn(
+    'Admin QR file scan failed on every variant:',
+    candidates.map((candidate) => candidate.label),
+    failures
+  );
+  const lastFailure = failures[failures.length - 1];
+  throw lastFailure instanceof Error
+    ? lastFailure
+    : new Error('Could not read a QR code from that image.');
+}
+
+
+// -----------------------------------------------
 // Small presentational pieces
 // -----------------------------------------------
 
@@ -166,6 +408,10 @@ export default function QRScanner() {
   // Confirm (complete) action
   const [isConfirming, setIsConfirming] = useState(false);
 
+  // "I verified the bank slip" tick — only rendered (and required) while the
+  // linked payment row is still PENDING_SLIP_VERIFICATION.
+  const [slipVerified, setSlipVerified] = useState(false);
+
   // Manual paste fallback
   const [manualInput, setManualInput] = useState('');
 
@@ -191,6 +437,8 @@ export default function QRScanner() {
     async (appointmentId) => {
       setIsResolving(true);
       setCameraError('');
+      // A fresh scan must never inherit the previous appointment's slip tick.
+      setSlipVerified(false);
       try {
         const appt = await fetchScannedAppointment(appointmentId);
         setDetail(appt);
@@ -221,7 +469,7 @@ export default function QRScanner() {
     setCameraError('');
     setIsScanning(true);
     try {
-      const html5QrCode = new Html5Qrcode(SCANNER_ID);
+      const html5QrCode = new Html5Qrcode(SCANNER_ID, CAMERA_SCAN_OPTIONS);
       scannerRef.current = html5QrCode;
       await html5QrCode.start(
         { facingMode: 'environment' },
@@ -267,6 +515,7 @@ export default function QRScanner() {
     setFeedback(null);
     setCameraError('');
     setManualInput('');
+    setSlipVerified(false);
   }, [stopCamera]);
 
   const handleFileScan = useCallback(
@@ -275,20 +524,29 @@ export default function QRScanner() {
       if (!file) return;
       setCameraError('');
       setIsResolving(true);
+      // `scanFile()` resets the scanner element it is given, so a live camera
+      // scan has to be released first (otherwise the <video> is torn down while
+      // the capture stream keeps running).
+      if (isScanning) await stopCamera();
       try {
-        const html5QrCode = new Html5Qrcode(SCANNER_ID, { verbose: false });
-        scannerRef.current = html5QrCode;
-        const decodedText = await html5QrCode.scanFile(file, false);
-        await html5QrCode.clear();
-        handleScannedText(decodedText);
+        const decodedText = await decodeQrFromImageFile(file);
+        await handleScannedText(decodedText);
       } catch (error) {
-        flash('error', error?.message || 'Could not read a QR code from that image.');
+        // Log the decoder's raw exception ("No MultiFormat Readers were able to
+        // detect the code.") but show the admin something actionable instead.
+        console.error('Admin QR file scan failed:', error);
+        flash(
+          'error',
+          "We couldn't find a QR code in that image. Use a sharp, well-lit " +
+            'photo where the QR code fills most of the frame, or scan with the ' +
+            'camera instead.'
+        );
       } finally {
         setIsResolving(false);
         event.target.value = '';
       }
     },
-    [handleScannedText, flash]
+    [handleScannedText, flash, isScanning, stopCamera]
   );
 
   const handleManualSubmit = useCallback(
@@ -300,31 +558,47 @@ export default function QRScanner() {
     [manualInput, handleScannedText]
   );
 
-  // Confirms the scanned appointment: status -> COMPLETED, payment -> PAID.
+  // Confirms the scanned appointment: the linked payments row is marked PAID and
+  // the visit is completed. `verifiedSlip` is only meaningful for a payment that
+  // is still PENDING_SLIP_VERIFICATION, where the backend requires it.
   const handleConfirm = useCallback(async () => {
     if (!detail?.id || isConfirming) return;
     setIsConfirming(true);
     try {
-      const updated = await confirmScannedAppointment(detail.id);
+      const updated = await confirmScannedAppointment(detail.id, {
+        verifiedSlip: slipVerified,
+      });
+      const wasCompleted = detail.status === 'COMPLETED';
+      const paymentWasPaid = detail.payment.status === 'PAID';
       setDetail((prev) =>
         prev
           ? {
               ...prev,
               status: updated.status || 'COMPLETED',
-              payment: { ...prev.payment, status: updated.payment_status || 'PAID' },
+              // Trust the values reported back from the payments row.
+              payment: {
+                ...prev.payment,
+                status: updated.payment_status || prev.payment.status,
+                amount: updated.payment_amount ?? prev.payment.amount,
+                method: updated.payment_method || prev.payment.method,
+              },
             }
           : prev
       );
       flash(
         'success',
-        'Appointment confirmed — status is now Completed and the payment is marked as Paid.'
+        wasCompleted
+          ? 'Payment collected — the appointment is completed and marked as Paid.'
+          : paymentWasPaid
+            ? 'Visit marked as Completed — the payment was already recorded as Paid.'
+            : 'Appointment confirmed — status is now Completed and the payment is marked as Paid.'
       );
     } catch (err) {
       flash('error', err.message || 'Failed to confirm the appointment.');
     } finally {
       setIsConfirming(false);
     }
-  }, [detail, isConfirming, flash]);
+  }, [detail, isConfirming, slipVerified, flash]);
 
   const statusClass = detail ? STATUS_STYLES[detail.status] || STATUS_STYLES.PENDING : '';
   const statusLabel = detail ? STATUS_LABELS[detail.status] || detail.status : '';
@@ -688,22 +962,45 @@ export default function QRScanner() {
 
                 {/* Confirm action */}
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
-                  {detail.status === 'COMPLETED' ? (
-                    <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                      <CheckCircle2 className="w-5 h-5" />
-                      Visit completed &amp; payment received
-                    </div>
-                  ) : detail.status === 'CANCELLED' ? (
+                  {detail.status === 'CANCELLED' ? (
                     <div className="flex items-center justify-center gap-2 rounded-xl bg-rose-50 dark:bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-700 dark:text-rose-400">
                       <AlertTriangle className="w-5 h-5" />
                       Appointment cancelled — confirmation unavailable
                     </div>
+                  ) : detail.status === 'MISSED' ? (
+                    <div className="flex items-center justify-center gap-2 rounded-xl bg-orange-50 dark:bg-orange-500/10 px-4 py-3 text-sm font-semibold text-orange-700 dark:text-orange-400">
+                      <AlertTriangle className="w-5 h-5" />
+                      Visit marked as Missed — please book a new visit
+                    </div>
+                  ) : detail.status === 'COMPLETED' && detail.payment.status === 'PAID' ? (
+                    <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="w-5 h-5" />
+                      Visit completed &amp; payment received
+                    </div>
                   ) : (
                     <>
+                      {detail.payment.status === 'PENDING_SLIP_VERIFICATION' && (
+                        <label className="mb-3 flex items-start gap-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/10 px-3 py-2.5 text-xs text-sky-800 dark:text-sky-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={slipVerified}
+                            onChange={(e) => setSlipVerified(e.target.checked)}
+                            className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-slate-300 text-[#00a8cc] focus:ring-[#00a8cc]/30"
+                          />
+                          <span>
+                            <span className="font-semibold">I verified the bank slip</span> — this
+                            booking's slip is still pending verification, so it is only released as
+                            Paid once this is ticked.
+                          </span>
+                        </label>
+                      )}
                       <button
                         type="button"
                         onClick={handleConfirm}
-                        disabled={isConfirming}
+                        disabled={
+                          isConfirming ||
+                          (detail.payment.status === 'PENDING_SLIP_VERIFICATION' && !slipVerified)
+                        }
                         className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         {isConfirming ? (
@@ -711,15 +1008,50 @@ export default function QRScanner() {
                         ) : (
                           <CheckCircle2 className="w-4 h-4" />
                         )}
-                        {isConfirming ? 'Confirming…' : 'Confirm Appointment'}
+                        {isConfirming
+                          ? 'Confirming…'
+                          : detail.payment.status === 'PAID'
+                            ? 'Mark Visit as Completed'
+                            : detail.status === 'COMPLETED'
+                              ? 'Collect Payment (Mark as Paid)'
+                              : 'Confirm Appointment'}
                       </button>
                       <p className="mt-2 text-center text-xs text-slate-400 dark:text-slate-500">
-                        Confirming marks this appointment as{' '}
-                        <span className="font-medium text-slate-500 dark:text-slate-400">
-                          Completed
-                        </span>{' '}
-                        and its payment as{' '}
-                        <span className="font-medium text-slate-500 dark:text-slate-400">Paid</span>.
+                        {detail.payment.status === 'PAID' ? (
+                          <>
+                            The payment is already recorded as{' '}
+                            <span className="font-medium text-slate-500 dark:text-slate-400">Paid</span>
+                            {' — this marks the visit as '}
+                            <span className="font-medium text-slate-500 dark:text-slate-400">
+                              Completed
+                            </span>
+                            .
+                          </>
+                        ) : detail.status === 'COMPLETED' ? (
+                          <>
+                            The visit is already{' '}
+                            <span className="font-medium text-slate-500 dark:text-slate-400">
+                              Completed
+                            </span>
+                            {' — recording the payment as '}
+                            <span className="font-medium text-slate-500 dark:text-slate-400">
+                              Paid
+                            </span>
+                            .
+                          </>
+                        ) : (
+                          <>
+                            Confirming marks this appointment as{' '}
+                            <span className="font-medium text-slate-500 dark:text-slate-400">
+                              Completed
+                            </span>{' '}
+                            and its payment as{' '}
+                            <span className="font-medium text-slate-500 dark:text-slate-400">
+                              Paid
+                            </span>
+                            .
+                          </>
+                        )}
                       </p>
                     </>
                   )}

@@ -27,6 +27,18 @@ export default function PatientsDashboard() {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
+  const handleFavoriteToggle = (doctorId, isFav) => {
+    setFavoriteDoctors((prev) => {
+      if (isFav) {
+        return prev.map((d) => (d.id === doctorId ? { ...d, isFavorite: true } : d));
+      }
+      return prev.filter((d) => d.id !== doctorId);
+    });
+    setSelectedDoctor((prev) =>
+      prev && prev.id === doctorId ? { ...prev, isFavorite: isFav } : prev
+    );
+  };
+
   useEffect(() => {
     const loadAppointments = async () => {
       try {
@@ -77,7 +89,9 @@ export default function PatientsDashboard() {
 
         setStats({
           totalScheduled: appts.filter(
-            (a) => a.status === 'PENDING' || a.status === 'CONFIRMED'
+            (a) =>
+              (a.status === 'PENDING' || a.status === 'CONFIRMED') &&
+              (a.badgeStatus || '').toUpperCase() !== 'MISSED'
           ).length,
           completedVisits: appts.filter((a) => a.status === 'COMPLETED').length,
           waitlist: waitlistCount,
@@ -105,6 +119,13 @@ export default function PatientsDashboard() {
     return <LoadingSpinner message="Loading your dashboard" />;
   }
 
+  // Active appointments only — matches the AppointmentsCarousel filter
+  // (Completed / Cancelled / Missed are hidden from the cluster).
+  const activeAppointments = appointments.filter((a) => {
+    const status = (a.badgeStatus || a.status || '').toUpperCase();
+    return status !== 'COMPLETED' && status !== 'CANCELLED' && status !== 'MISSED';
+  });
+
   return (
     <div className="flex-1 w-full px-0 md:px-0 animate-fade-in">
       <div className="flex flex-row w-full mb-6 gap-4 md:gap-6 items-center justify-between">
@@ -113,7 +134,7 @@ export default function PatientsDashboard() {
             Upcoming Appointments
           </h1>
           <p className="text-[#00b8e6] font-medium text-sm md:text-base mt-1 md:mt-2">
-            {`${appointments.length} Scheduled`}
+            {`${activeAppointments.length} Scheduled`}
           </p>
         </div>
         <div className="flex-shrink-0">
@@ -156,7 +177,9 @@ export default function PatientsDashboard() {
           <FavoriteDoctorsCarousel 
             doctors={favoriteDoctors} 
             onDoctorClick={(doctor) => {
-              setSelectedDoctor(doctor);
+              // Favorites from the API always have isFavorite: true, but
+              // defensively force it so the modal heart renders red.
+              setSelectedDoctor({ ...doctor, isFavorite: true });
               setIsProfileModalOpen(true);
             }}
           />
@@ -169,6 +192,7 @@ export default function PatientsDashboard() {
             setSelectedDoctor(null);
           }}
           doctor={selectedDoctor}
+          onFavoriteToggle={handleFavoriteToggle}
         />
 
         <QRCodeModal

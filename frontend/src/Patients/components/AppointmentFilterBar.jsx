@@ -24,13 +24,14 @@ export default function AppointmentFilterBar({
     { name: 'All', count: counts.All },
     { name: 'Scheduled', count: counts.Upcoming },
     { name: 'Completed', count: counts.Completed },
+    { name: 'Missed', count: counts.Missed },
     { name: 'Waitlist', count: counts.Waitlist },
     { name: 'Cancelled', count: counts.Cancelled },
   ];
 
   // Determine whether the "Add New Appointment" button should be visible.
-  // It is hidden for Completed and Cancelled tabs.
-  const isAddButtonVisible = activeTab !== 'Completed' && activeTab !== 'Cancelled';
+  // It is hidden for Completed, Missed and Cancelled tabs.
+  const isAddButtonVisible = activeTab !== 'Completed' && activeTab !== 'Cancelled' && activeTab !== 'Missed';
 
   const handleTabClick = (tabName) => {
     setActiveTab(tabName);

@@ -1,5 +1,5 @@
- import { useEffect, useState } from 'react';
-import { Search, Calendar, ChevronDown } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Search, Calendar, ChevronDown, X } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -28,6 +28,7 @@ export default function DoctorSearchFilters({
   onSpecialtyChange,
   selectedDate,
   onDateChange,
+  onSearch,
 }) {
   const [specialties, setSpecialties] = useState(FALLBACK_SPECIALTIES);
   const [loading, setLoading] = useState(true);
@@ -113,8 +114,23 @@ export default function DoctorSearchFilters({
                 readOnly
                 value={selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
                 placeholder="Select date"
-                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 pr-10 text-sm text-slate-700 dark:text-slate-200 outline-none transition hover:border-gray-300 dark:hover:border-slate-600 focus:border-[#00b8e6] focus:ring-1 focus:ring-[#00b8e6] cursor-pointer"
+                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 pr-16 text-sm text-slate-700 dark:text-slate-200 outline-none transition hover:border-gray-300 dark:hover:border-slate-600 focus:border-[#00b8e6] focus:ring-1 focus:ring-[#00b8e6] cursor-pointer"
               />
+              {selectedDate && (
+                <button
+                  type="button"
+                  aria-label="Clear selected date"
+                  title="Clear date"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onDateChange?.('');
+                  }}
+                  className="absolute right-9 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
               <Calendar className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             </div>
           }
@@ -123,6 +139,8 @@ export default function DoctorSearchFilters({
 
       <button
         type="button"
+        onClick={() => onSearch?.()}
+        title={selectedDate ? 'Refresh availability for the selected date' : 'Refresh doctor list'}
         className="bg-[#00b8e6] hover:bg-[#0099c2] text-white px-6 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 h-11 flex-shrink-0"
       >
         <Search className="h-4 w-4" />

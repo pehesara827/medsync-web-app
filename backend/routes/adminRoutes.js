@@ -59,7 +59,9 @@ router.get('/patients/:id', getAdminPatientById);
 router.get('/scan/:appointmentId', getScannedAppointment);
 
 // POST /api/admin/scan/:appointmentId/confirm - Confirm a scanned appointment
-// at the desk: status -> COMPLETED and payment -> PAID.
+// at the desk: the linked payments row is marked PAID first (a payment still in
+// PENDING_SLIP_VERIFICATION requires `verifiedSlip: true`) and the visit is then
+// marked COMPLETED.
 router.post('/scan/:appointmentId/confirm', confirmScannedAppointment);
 
 // GET /api/admin/doctors - Approved doctors for the booking dropdown

@@ -176,7 +176,9 @@ const fetchPaymentWithAppointment = async (paymentId) => {
  *     - payments.payment_status -> 'PAID'
  *     - payments.transaction_id -> transactionId (if provided)
  *     - payments.paid_at        -> NOW()
- *     - appointments.payment_status -> 'PAID' (status stays PENDING)
+ *     - appointments.payment_status -> 'PAID'
+ *     - appointments.status -> 'CONFIRMED' (only when currently PENDING;
+ *       already-CONFIRMED stays CONFIRMED; COMPLETED/CANCELLED are left alone)
  *     - notification 'PAYMENT_RECEIVED' to the patient
  *
  *   REJECTED:
@@ -231,14 +233,23 @@ export const verifyPaymentSlip = async (req, res, next) => {
 
       if (updateError) throw updateError;
 
-      // Sync the appointment's payment status column. Appointment status stays
-      // PENDING — it only advances when the desk checks the patient in.
+      // Sync the appointment's payment status column and confirm the booking.
+      // Only PENDING appointments transition to CONFIRMED — never resurrect a
+      // COMPLETED/CANCELLED booking; an already-CONFIRMED one stays CONFIRMED.
+      let appointmentStatus = appointment.status || null;
       if (appointment.id) {
-        const { error: apptError } = await supabase
+        const apptUpdate = { payment_status: 'PAID' };
+        if (appointment.status === 'PENDING') {
+          apptUpdate.status = 'CONFIRMED';
+        }
+        const { data: updatedAppt, error: apptError } = await supabase
           .from('appointments')
-          .update({ payment_status: 'PAID' })
-          .eq('id', appointment.id);
+          .update(apptUpdate)
+          .eq('id', appointment.id)
+          .select('status')
+          .maybeSingle();
         if (apptError) throw apptError;
+        if (updatedAppt?.status) appointmentStatus = updatedAppt.status;
       }
 
       // Notify the patient that payment was approved.
@@ -260,7 +271,12 @@ export const verifyPaymentSlip = async (req, res, next) => {
 
       return res.json({
         success: true,
-        data: { payment: updated },
+        data: {
+          payment: updated,
+          appointment: appointment.id
+            ? { id: appointment.id, status: appointmentStatus }
+            : null,
+        },
       });
     }
 

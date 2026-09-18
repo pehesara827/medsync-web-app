@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import AppointmentConfirmationPass from './AppointmentConfirmationPass';
 
@@ -57,13 +58,33 @@ export default function QRCodeModal({ isOpen, onClose, appointment }) {
     };
   }, [isOpen, appointment?.id]);
 
-  if (!isOpen) return null;
+  // Lock body scroll + close on Escape while the QR pass is open
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = 'unset';
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop with blur */}
+  if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Appointment QR code"
+    >
+      {/* Full-screen blurred backdrop (covers sidebar + header) */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/55 backdrop-blur-md"
         onClick={onClose}
       ></div>
 
@@ -112,6 +133,7 @@ export default function QRCodeModal({ isOpen, onClose, appointment }) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

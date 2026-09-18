@@ -27,6 +27,7 @@ import scheduleRoutes from './routes/scheduleRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import { expireExpiredOffers } from './models/waitlistModel.js';
+import { markMissedAppointments } from './models/appointmentModel.js';
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -127,6 +128,24 @@ const runWaitlistExpiry = async () => {
   }
 };
 
+// ── Missed-Appointment Sweeper ──────────────────────────────────────────
+// Runs every 10 minutes. Any PENDING/CONFIRMED appointment whose
+// appointment_date is before today is marked MISSED and its patient
+// receives an APPOINTMENT_MISSED in-app notification. Idempotent: only
+// active rows match, so overlapping ticks never double-mark/notify.
+const MISSED_SWEEP_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
+const runMissedSweep = async () => {
+  try {
+    const missedCount = await markMissedAppointments();
+    if (missedCount > 0) {
+      console.log(`[Scheduler] Marked ${missedCount} appointment(s) as MISSED.`);
+    }
+  } catch (error) {
+    console.error('[Scheduler] Error running missed-appointment sweep:', error.message);
+  }
+};
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
@@ -135,4 +154,8 @@ app.listen(PORT, () => {
   setTimeout(runWaitlistExpiry, 10 * 1000);
   setInterval(runWaitlistExpiry, WAITLIST_EXPIRY_INTERVAL_MS);
   console.log(`[Scheduler] Waitlist expiry job scheduled every ${WAITLIST_EXPIRY_INTERVAL_MS / 60000} minutes.`);
+
+  setTimeout(runMissedSweep, 20 * 1000);
+  setInterval(runMissedSweep, MISSED_SWEEP_INTERVAL_MS);
+  console.log(`[Scheduler] Missed-appointment sweep scheduled every ${MISSED_SWEEP_INTERVAL_MS / 60000} minutes.`);
 });

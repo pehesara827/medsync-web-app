@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
         'WAITLIST_EXPIRED',
         'APPOINTMENT_CONFIRMED',
         'APPOINTMENT_CANCELLED',
+        'APPOINTMENT_MISSED',
         'SESSION_DELAY',
         'PAYMENT_RECEIVED',
         'GENERAL'

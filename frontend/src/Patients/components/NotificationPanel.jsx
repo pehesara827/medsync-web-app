@@ -29,6 +29,7 @@ const TYPE_CONFIG = {
   WAITLIST_EXPIRED: { Icon: Clock, color: 'text-slate-500 dark:text-slate-400', badge: 'bg-slate-50 dark:bg-slate-800' },
   APPOINTMENT_CONFIRMED: { Icon: Calendar, color: 'text-emerald-500', badge: 'bg-emerald-50 dark:bg-emerald-950/30' },
   APPOINTMENT_CANCELLED: { Icon: Calendar, color: 'text-red-500', badge: 'bg-red-50 dark:bg-red-950/30' },
+  APPOINTMENT_MISSED: { Icon: Calendar, color: 'text-orange-500', badge: 'bg-orange-50 dark:bg-orange-950/30' },
   SESSION_DELAY: { Icon: Clock, color: 'text-orange-500', badge: 'bg-orange-50 dark:bg-orange-950/30' },
   PAYMENT_RECEIVED: { Icon: Info, color: 'text-cyan-500', badge: 'bg-cyan-50 dark:bg-cyan-950/30' },
 };

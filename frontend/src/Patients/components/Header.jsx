@@ -1,9 +1,13 @@
-import { useLocation } from 'react-router-dom';
-import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Sun, Moon } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
-import Settings from './Settings';
+import { useDarkMode } from '../../context/useDarkMode';
 import NotificationPanel from './NotificationPanel';
+
+// Shown when the patient has no profile picture yet.
+const FALLBACK_AVATAR_URL =
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256';
 
 // Map route paths to your desired dynamic titles
 const PAGE_TITLES = {
@@ -22,17 +26,15 @@ const PAGE_TITLES = {
 
 export default function Header({ onMenuClick }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { darkMode, toggleDarkMode } = useDarkMode();
   const isProfileRoute = location.pathname === '/patient/profile';
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const settingsRef = useRef(null);
-  const settingsButtonRef = useRef(null);
-  const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 });
-
   // Notification panel + live unread-count badge
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [userId, setUserId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [patientName, setPatientName] = useState('');
+  const [profilePicUrl, setProfilePicUrl] = useState(FALLBACK_AVATAR_URL);
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -48,11 +50,13 @@ export default function Header({ onMenuClick }) {
     resolveUser();
   }, []);
 
-  // ── Fetch the signed-in patient's name for the profile page title ───────
+  // ── Fetch the signed-in patient's name + profile picture ────────────────
+  // Runs on every patient page so the header avatar is always the user's own
+  // pic (and the profile route still gets the name for its title).
   useEffect(() => {
-    if (!isProfileRoute || !userId) return;
+    if (!userId) return;
 
-    const fetchPatientName = async () => {
+    const fetchPatientHeader = async () => {
       try {
         const response = await fetch(`${backendUrl}/api/patient/profile/${userId}`);
         if (!response.ok) return;
@@ -61,13 +65,16 @@ export default function Header({ onMenuClick }) {
         if (data?.data?.fullName) {
           setPatientName(data.data.fullName);
         }
+        if (data?.data?.avatarUrl) {
+          setProfilePicUrl(data.data.avatarUrl);
+        }
       } catch (err) {
-        console.error('Failed to fetch patient name:', err);
+        console.error('Failed to fetch patient header info:', err);
       }
     };
 
-    fetchPatientName();
-  }, [isProfileRoute, userId, backendUrl]);
+    fetchPatientHeader();
+  }, [userId, backendUrl]);
 
   // ── Fetch the initial unread notification count ─────────────────────────
   useEffect(() => {
@@ -136,40 +143,6 @@ export default function Header({ onMenuClick }) {
       supabase.removeChannel(channel);
     };
   }, [userId]);
-
-  // Close the settings panel when clicking outside of it or the settings button
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        settingsRef.current &&
-        !settingsRef.current.contains(event.target) &&
-        settingsButtonRef.current &&
-        !settingsButtonRef.current.contains(event.target)
-      ) {
-        setIsSettingsOpen(false);
-      }
-    };
-
-    if (isSettingsOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isSettingsOpen]);
-
-  // Toggle settings panel and calculate its position relative to the settings button
-  const handleSettingsClick = () => {
-    if (settingsButtonRef.current) {
-      const rect = settingsButtonRef.current.getBoundingClientRect();
-      setPanelPosition({
-        top: rect.bottom,
-        right: window.innerWidth - rect.right,
-      });
-    }
-    setIsSettingsOpen((prev) => !prev);
-  };
 
   // Get the current page title from the route map, falling back to the path
   // name. The patient profile route shows the patient's own name instead.
@@ -266,58 +239,37 @@ export default function Header({ onMenuClick }) {
           )}
         </button>
 
-        {/* Settings Icon - Hidden on very small screens */}
+        {/* Dark Mode Toggle */}
         <button
           type="button"
-          aria-label="Settings"
-          aria-expanded={isSettingsOpen}
-          ref={settingsButtonRef}
-          onClick={handleSettingsClick}
+          aria-label="Toggle dark mode"
+          onClick={toggleDarkMode}
           className="p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
         >
-          <svg
-            className="w-4 md:w-5 h-4 md:h-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
+          {darkMode ? <Sun className="w-4 md:w-5 h-4 md:h-5" /> : <Moon className="w-4 md:w-5 h-4 md:h-5" />}
         </button>
 
-        {/* User Profile Avatar */}
-        <div className="w-7 md:w-9 h-7 md:h-9 rounded-full overflow-hidden border border-slate-200 cursor-pointer shadow-sm flex-shrink-0">
+        {/* User Profile Avatar — navigates to the profile page */}
+        <button
+          type="button"
+          onClick={() => navigate('/patient/profile')}
+          aria-label="Go to profile"
+          title={patientName || 'Go to profile'}
+          className="w-7 md:w-9 h-7 md:h-9 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0 hover:ring-2 hover:ring-[#00a8cc]/40 transition focus:outline-none focus:ring-2 focus:ring-[#00a8cc]/50"
+        >
           <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256"
-            alt="User profile"
+            src={profilePicUrl}
+            alt={patientName ? `${patientName} profile` : 'User profile'}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              if (e.currentTarget.src !== FALLBACK_AVATAR_URL) {
+                e.currentTarget.src = FALLBACK_AVATAR_URL;
+              }
+            }}
           />
-        </div>
+        </button>
 
       </div>
-
-      {/* Settings Dropdown Panel - Rendered via portal outside the header to prevent height changes */}
-      {isSettingsOpen &&
-        createPortal(
-          <div
-            ref={settingsRef}
-            className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden"
-            style={{ top: `${panelPosition.top}px`, right: `${panelPosition.right}px` }}
-          >
-            <Settings />
-          </div>,
-          document.body
-        )}
 
       {/* Notification Slide-out Side Panel */}
       <NotificationPanel

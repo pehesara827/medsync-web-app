@@ -19,6 +19,8 @@ const getStatusBadgeClasses = (status) => {
       return 'bg-amber-50 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300';
     case 'Cancelled':
       return 'bg-red-50 text-red-600 dark:bg-red-500/20 dark:text-red-300';
+    case 'Missed':
+      return 'bg-orange-50 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300';
     default:
       return 'bg-slate-50 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
   }
@@ -45,7 +47,7 @@ const getNormalizedStatus = (appointment) => {
  * Dropdown menu component for appointment actions (Edit / Cancel / Review).
  * Action visibility is driven by the appointment's status:
  *   - Completed  → Review only
- *   - Cancelled  → No actions (menu hidden entirely)
+ *   - Cancelled / Missed → No actions (menu hidden entirely)
  *   - Other      → Edit + Cancel
  *
  * The dropdown is rendered via a React portal at the document body level so it
@@ -83,8 +85,9 @@ function ActionsMenu({ appointment, onEdit, onCancel, onReview }) {
 
   const status = getNormalizedStatus(appointment);
 
-  // Don't render the menu at all for cancelled appointments
-  if (status === 'CANCELLED') {
+  // Don't render the menu at all for cancelled or missed appointments —
+  // those are terminal states with no further actions (no Review for Missed).
+  if (status === 'CANCELLED' || status === 'MISSED') {
     return null;
   }
 

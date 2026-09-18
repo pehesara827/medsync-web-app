@@ -277,7 +277,7 @@ export default function PaymentsManagement() {
     }
     doVerify(
       { status: 'APPROVED', transactionId: bankReference.trim() },
-      'Payment approved'
+      'Payment approved – appointment confirmed'
     );
   };
 

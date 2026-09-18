@@ -19,7 +19,6 @@ import ChatWidget from './components/ChatWidget';
 import PatientDashboard from './Patients/pages/patients-dashboard';
 import PatientsAppointments from './Patients/pages/patients-appoinments';
 import AppointmentConfirmationPage from './Patients/pages/AppointmentConfirmationPage';
-import QRCodePage from './Patients/pages/QRCodePage';
 
 import PatientProfile from './Patients/pages/patientProfile';
 import ContactUs from './Patients/pages/ContactUs';
@@ -77,7 +76,6 @@ export default function App() {
             <Route index element={<PatientDashboard />} />
             <Route path="appointments" element={<PatientsAppointments />} />
             <Route path="appointments/:appointmentId" element={<AppointmentConfirmationPage />} />
-            <Route path="qr-codes" element={<QRCodePage />} />
             <Route path="doctors" element={<PatientsDoctors />} />
             <Route path="profile" element={<PatientProfile />} />
           </Route>

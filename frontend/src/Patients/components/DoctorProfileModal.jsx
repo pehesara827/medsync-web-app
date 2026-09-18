@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Star, MapPin, Clock, Briefcase, Phone, MessageSquare } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import FavoriteButton from './FavoriteButton';
@@ -7,6 +8,14 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
   const [isAnimating, setIsAnimating] = useState(false);
   const [isFavorite, setIsFavorite] = useState(Boolean(doctor?.isFavorite));
   const [isUpdatingFavorite, setIsUpdatingFavorite] = useState(false);
+
+  // Sync local favorite state whenever a different doctor is opened.
+  // useState(initial) only runs on first mount, so without this the heart
+  // keeps showing the previous doctor's state (e.g. not red for favorites
+  // opened from the dashboard's Favorite Doctors section).
+  useEffect(() => {
+    setIsFavorite(Boolean(doctor?.isFavorite));
+  }, [doctor?.id, doctor?.isFavorite, isOpen]);
 
   // Review state (view only)
   const [reviews, setReviews] = useState([]);
@@ -68,7 +77,18 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
     }
   }, [isOpen, doctor, fetchReviews]);
 
+  // Close on Escape (works from portal since listener is on document)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleClose]);
+
   if (!isOpen || !doctor) return null;
+  if (typeof document === 'undefined') return null;
 
   const rating = Number(doctor.rating) || 0;
   const reviewsCount = Number(doctor.reviewsCount) || 0;
@@ -116,7 +136,11 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
         throw new Error(errorBody.message || 'Unable to update favorite');
       }
 
-      const nextFavoriteState = !isFavorite;
+      const result = await response.json().catch(() => ({}));
+      // Trust the server as source of truth instead of blindly flipping,
+      // so the heart stays in sync even if a stale local state was shown.
+      const nextFavoriteState =
+        typeof result.isFavorite === 'boolean' ? result.isFavorite : !isFavorite;
       setIsFavorite(nextFavoriteState);
       onFavoriteToggle?.(doctor.id, nextFavoriteState);
     } catch (err) {
@@ -150,16 +174,18 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
     );
   };
 
-  return (
+  return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${
         isAnimating ? 'opacity-100' : 'opacity-0'
       }`}
+      role="dialog"
+      aria-modal="true"
       onClick={handleBackdropClick}
     >
-      {/* Backdrop with blur */}
+      {/* Full-screen blurred backdrop (covers sidebar + header) */}
       <div
-        className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-all duration-300 ${
+        className={`absolute inset-0 bg-slate-900/55 backdrop-blur-md transition-all duration-300 ${
           isAnimating ? 'opacity-100' : 'opacity-0'
         }`}
       ></div>
@@ -407,6 +433,7 @@ export default function DoctorProfileModal({ isOpen, onClose, doctor, onFavorite
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

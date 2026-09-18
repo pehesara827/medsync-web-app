@@ -23,14 +23,30 @@ import {
   deleteSchedule,
 } from '../../components/api/adminScheduleApi';
 
-// ── Mock data (offline fallback only; real data comes from the API) ───────
-const mockSchedules = [
+// ── Today helpers (local YYYY-MM-DD) ──────────────────────────────────
+// All date comparisons use plain YYYY-MM-DD strings so `>=` correctly
+// means "today or a future day" without timezone-shift bugs.
+const toDateStr = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+
+const getTodayStr = () => toDateStr(new Date());
+
+const addDaysStr = (baseStr, days) => {
+  const [y, m, d] = baseStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return toDateStr(dt);
+};
+
+const buildMockSchedules = (todayStr) => [
   {
     id: 'SCH-1001',
     doctorName: 'Dr. Sarah Jenkins',
     doctorSpecialty: 'Neurology',
     doctorAvatar: 'SJ',
-    availableDate: '2026-08-28',
+    availableDate: todayStr,
     startTime: '09:00 AM',
     endTime: '12:00 PM',
     consultationFee: 5000,
@@ -45,7 +61,7 @@ const mockSchedules = [
     doctorName: 'Dr. Michael Chen',
     doctorSpecialty: 'Pediatrics',
     doctorAvatar: 'MC',
-    availableDate: '2026-08-28',
+    availableDate: todayStr,
     startTime: '10:00 AM',
     endTime: '01:00 PM',
     consultationFee: 4500,
@@ -60,7 +76,7 @@ const mockSchedules = [
     doctorName: 'Dr. Rachel Vance',
     doctorSpecialty: 'Orthopedics',
     doctorAvatar: 'RV',
-    availableDate: '2026-08-28',
+    availableDate: todayStr,
     startTime: '08:00 AM',
     endTime: '11:30 AM',
     consultationFee: 5500,
@@ -75,7 +91,7 @@ const mockSchedules = [
     doctorName: 'Dr. Priya Fernando',
     doctorSpecialty: 'Cardiology',
     doctorAvatar: 'PF',
-    availableDate: '2026-08-29',
+    availableDate: addDaysStr(todayStr, 1),
     startTime: '09:30 AM',
     endTime: '12:30 PM',
     consultationFee: 6500,
@@ -90,7 +106,7 @@ const mockSchedules = [
     doctorName: 'Dr. Nimal Perera',
     doctorSpecialty: 'Dermatology',
     doctorAvatar: 'NP',
-    availableDate: '2026-08-29',
+    availableDate: addDaysStr(todayStr, 1),
     startTime: '02:00 PM',
     endTime: '05:00 PM',
     consultationFee: 4000,
@@ -118,8 +134,6 @@ const DELAY_DURATIONS = [
   { label: '45 Mins', minutes: 45 },
   { label: '1 Hour', minutes: 60 },
 ];
-
-const DEFAULT_DATE = '2026-08-28';
 
 const inputClass =
   'w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00a8cc]/20 focus:border-[#00a8cc]/50 transition';
@@ -168,11 +182,16 @@ const formatTime = (timeStr) => {
   return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
 };
 export default function ScheduleManagement() {
+  // Real local today — the single source of truth for all date comparisons.
+  const [todayStr] = useState(() => getTodayStr());
   const [schedules, setSchedules] = useState([]);
   const [loadingSchedules, setLoadingSchedules] = useState(true);
   const [doctors, setDoctors] = useState(MOCK_DOCTORS); // fallback until API loads
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFilter, setDateFilter] = useState(DEFAULT_DATE); // DEFAULT_DATE = Today
+  // View toggle: 'all' (default) = today + future, 'today' = today only.
+  const [viewMode, setViewMode] = useState('all');
+  // Specific-date narrowing. '' = no specific date picked.
+  const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -246,8 +265,8 @@ export default function ScheduleManagement() {
         }
       } catch {
         if (cancelled) return;
-        // Fall back to mock data so the page still renders offline.
-        setSchedules(mockSchedules);
+        // Fall back to mock data (today + tomorrow) so the page still renders offline.
+        setSchedules(buildMockSchedules(getTodayStr()));
         showToast('Could not load schedules. Showing offline data.', 'error');
       } finally {
         if (!cancelled) setLoadingSchedules(false);
@@ -259,35 +278,46 @@ export default function ScheduleManagement() {
       cancelled = true;
     };
   }, []);
-  const todaySessions = schedules.filter((s) => s.availableDate === DEFAULT_DATE).length;
+  // ── Today + upcoming only ──────────────────────────────────────────
+  // Past schedules (availableDate < today) are never shown or counted.
+  // String comparison works because dates are YYYY-MM-DD.
+  const upcomingSchedules = useMemo(
+    () => schedules.filter((s) => s.availableDate >= todayStr),
+    [schedules, todayStr]
+  );
+
+  const todaySessions = upcomingSchedules.filter(
+    (s) => s.availableDate === todayStr
+  ).length;
   const avgFill =
-    schedules.length === 0
+    upcomingSchedules.length === 0
       ? 0
       : Math.round(
-          (schedules.reduce(
+          upcomingSchedules.reduce(
             (sum, s) => sum + (s.currentAppointments / s.maxPatients) * 100,
             0
-          ) /
-            schedules.length) *
-            100
+          ) / upcomingSchedules.length
         );
-  const activeDelays = schedules.filter((s) => s.isDelayed).length;
-  const totalWaitlisted = schedules.reduce(
+  const activeDelays = upcomingSchedules.filter((s) => s.isDelayed).length;
+  const totalWaitlisted = upcomingSchedules.reduce(
     (sum, s) => sum + Math.max(0, s.maxPatients - s.currentAppointments),
     0
   );
 
   // ── Filtering ──────────────────────────────────────────────────────
   const filteredSchedules = useMemo(() => {
-    return schedules.filter((s) => {
+    return upcomingSchedules.filter((s) => {
       const q = searchQuery.trim().toLowerCase();
       const matchesSearch =
         !q ||
         s.doctorName.toLowerCase().includes(q) ||
         s.doctorSpecialty.toLowerCase().includes(q);
 
-      const matchesDate =
-        dateFilter === 'all' || s.availableDate === dateFilter;
+      // Priority: specific picked date > Today toggle > All upcoming.
+      let matchesDate = true;
+      if (dateFilter) matchesDate = s.availableDate === dateFilter;
+      else if (viewMode === 'today') matchesDate = s.availableDate === todayStr;
+      else matchesDate = s.availableDate >= todayStr;
 
       let matchesStatus = true;
       if (statusFilter === 'delayed') matchesStatus = s.isDelayed;
@@ -296,7 +326,7 @@ export default function ScheduleManagement() {
 
       return matchesSearch && matchesDate && matchesStatus;
     });
-  }, [schedules, searchQuery, dateFilter, statusFilter]);
+  }, [upcomingSchedules, searchQuery, dateFilter, viewMode, todayStr, statusFilter]);
 
   const handleCreateSchedule = async (e) => {
     e.preventDefault();
@@ -307,7 +337,7 @@ export default function ScheduleManagement() {
 
     const payload = {
       doctor_id: doctor ? doctor.id : null,
-      available_date: form.get('date') || DEFAULT_DATE,
+      available_date: form.get('date') || todayStr,
       start_time: form.get('startTime') || '09:00',
       end_time: form.get('endTime') || '12:00',
       consultation_fee: Number(form.get('fee')) || 0,
@@ -316,6 +346,12 @@ export default function ScheduleManagement() {
 
     if (!payload.doctor_id) {
       showToast('Please select a valid doctor.', 'error');
+      return;
+    }
+
+    // Past dates are not allowed — only today and future days.
+    if (payload.available_date < todayStr) {
+      showToast('Cannot create a schedule in the past. Please pick today or a future date.', 'error');
       return;
     }
 
@@ -484,12 +520,57 @@ export default function ScheduleManagement() {
           />
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/60 px-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#00a8cc]/20 focus:border-[#00a8cc]/70 transition"
-          />
+          {/* All Upcoming / Today toggle — default is All Upcoming */}
+          <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/60 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('all');
+                setDateFilter('');
+              }}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                viewMode === 'all' && !dateFilter
+                  ? 'bg-[#00a8cc] text-white shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+            >
+              All Upcoming
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('today');
+                setDateFilter('');
+              }}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                viewMode === 'today' && !dateFilter
+                  ? 'bg-[#00a8cc] text-white shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+            >
+              Today
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={dateFilter}
+              min={todayStr}
+              onChange={(e) => setDateFilter(e.target.value)}
+              title="Jump to a specific upcoming day (today or later)"
+              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/60 px-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#00a8cc]/20 focus:border-[#00a8cc]/70 transition"
+            />
+            {dateFilter && (
+              <button
+                type="button"
+                onClick={() => setDateFilter('')}
+                title="Clear date and show all upcoming"
+                className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -670,7 +751,7 @@ export default function ScheduleManagement() {
 
                 <div>
                   <label className={labelClass}>Date</label>
-                  <input name="date" type="date" required className={inputClass} defaultValue={DEFAULT_DATE} />
+                  <input name="date" type="date" required className={inputClass} defaultValue={todayStr} min={todayStr} />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

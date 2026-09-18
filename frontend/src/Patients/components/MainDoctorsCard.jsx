@@ -3,7 +3,7 @@ import { Star, Clock } from 'lucide-react';
 import BookAppointmentModal from './BookAppointmentModal';
 import DoctorProfileModal from './DoctorProfileModal';
 
-export default function MainDoctorsCard({ doctor }) {
+export default function MainDoctorsCard({ doctor, selectedDate = '', onFavoriteToggle }) {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
@@ -13,6 +13,31 @@ export default function MainDoctorsCard({ doctor }) {
 
   const rating = Number(doctor.rating) || 0;
   const reviewsCount = Number(doctor.reviewsCount) || 0;
+
+  // Date is a soft filter: every doctor stays visible. When a date is picked,
+  // show whether this doctor has bookable slots that day; Book Now prefills
+  // the picked date when available, otherwise the next-available date.
+  const showDateStatus = Boolean(selectedDate);
+  const hasSlotOnDate = showDateStatus ? Boolean(doctor.hasSlotOnDate) : false;
+  const slotsOnDate = Number(doctor.slotsOnDate) || 0;
+
+  const formatSlotTime = (timeStr) => {
+    if (!timeStr) return '';
+    const [h, m] = String(timeStr).split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return String(timeStr);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+  };
+
+  const formatPickedDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(`${iso}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const bookingDate = hasSlotOnDate ? selectedDate : doctor.availableDate;
 
   return (
     <>
@@ -47,13 +72,42 @@ export default function MainDoctorsCard({ doctor }) {
           </div>
 
           <div className="rounded-3xl bg-slate-50 dark:bg-slate-800 p-2.5 sm:p-3 border border-slate-100 dark:border-slate-700">
-            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-              <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
-              <div>
-                <p className="text-[9px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Next available</p>
-                <p className="font-semibold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">{doctor.nextAvailable}</p>
+            {showDateStatus ? (
+              hasSlotOnDate ? (
+                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                  <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-500" />
+                  <div>
+                    <p className="text-[9px] uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-400">
+                      Available {formatPickedDate(selectedDate)}
+                    </p>
+                    <p className="font-semibold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">
+                      {slotsOnDate} slot{slotsOnDate === 1 ? '' : 's'}
+                      {doctor.firstSlotTime ? ` from ${formatSlotTime(doctor.firstSlotTime)}` : ''}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                  <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400" />
+                  <div>
+                    <p className="text-[9px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                      Not available {formatPickedDate(selectedDate)}
+                    </p>
+                    <p className="font-semibold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">
+                      Next: {doctor.nextAvailable}
+                    </p>
+                  </div>
+                </div>
+              )
+            ) : (
+              <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+                <div>
+                  <p className="text-[9px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Next available</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">{doctor.nextAvailable}</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
@@ -85,7 +139,7 @@ export default function MainDoctorsCard({ doctor }) {
         onClose={() => setIsBookingModalOpen(false)}
         initialSpecialization={doctor.specialty}
         initialDoctorId={doctor.id}
-        initialDate={doctor.availableDate}
+        initialDate={bookingDate}
       />
 
       {/* Doctor Profile Modal */}
@@ -93,6 +147,7 @@ export default function MainDoctorsCard({ doctor }) {
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         doctor={doctor}
+        onFavoriteToggle={onFavoriteToggle}
       />
     </>
   );

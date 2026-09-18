@@ -7,11 +7,18 @@ const API_BASE_URL =
 
 /**
  * GET /api/admin/schedules/all
- * Returns ALL doctor schedules (with capacity ratio & delay status).
+ * Returns today + upcoming doctor schedules (past days excluded by default;
+ * pass ?include_past=true to fetch everything).
+ * @param {Object} [options] - e.g. { includePast: true }
  * @returns {Promise<Array>} The schedule list rows.
  */
-export const fetchAdminSchedules = async () => {
-  const res = await fetch(`${API_BASE_URL}/admin/schedules/all`);
+export const fetchAdminSchedules = async (options = {}) => {
+  const params = new URLSearchParams();
+  if (options.includePast) params.set('include_past', 'true');
+  if (options.doctorId) params.set('doctor_id', options.doctorId);
+  if (options.date) params.set('date', options.date);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`${API_BASE_URL}/admin/schedules/all${qs}`);
   if (!res.ok) {
     throw new Error(`Failed to load schedules (HTTP ${res.status})`);
   }
