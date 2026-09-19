@@ -5,6 +5,7 @@ import AppointmentFilterBar from '../components/AppointmentFilterBar';
 import AppointmentsTable from '../components/AppointmentsTable';
 import BookAppointmentModal from '../components/BookAppointmentModal';
 import AppointmentReviewModal from '../components/AppointmentReviewModal';
+import usePendingReviews from '../hooks/usePendingReviews';
 import WaitlistStatusCard from '../components/WaitlistStatusCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
@@ -27,8 +28,17 @@ export default function PatientsAppointments() {
   const [claimLoading, setClaimLoading] = useState(false);
   const [acceptingId, setAcceptingId] = useState(null);
   const [decliningId, setDecliningId] = useState(null);
-  const [reviewAppointment, setReviewAppointment] = useState(null);
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [patientName, setPatientName] = useState('');
+  const [manualReviewAppointment, setManualReviewAppointment] = useState(null);
+  const [isManualReviewOpen, setIsManualReviewOpen] = useState(false);
+
+  // Auto popup after a consultation is COMPLETED (polls pending reviews).
+  const {
+    reviewAppointment: autoReviewAppointment,
+    isReviewModalOpen: isAutoReviewOpen,
+    closeReviewModal: closeAutoReview,
+    handleReviewSubmitted: handleAutoReviewSubmitted,
+  } = usePendingReviews({ patientId });
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -45,7 +55,7 @@ export default function PatientsAppointments() {
 
         const { data: profile, error: profileError } = await supabase
           .from('patient_profiles')
-          .select('id')
+          .select('id, first_name')
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -56,6 +66,7 @@ export default function PatientsAppointments() {
         }
 
         setPatientId(profile.id);
+        setPatientName(profile.first_name || '');
       } catch (err) {
         setError(`Failed to load patient profile: ${err.message}`);
       }
@@ -319,14 +330,14 @@ export default function PatientsAppointments() {
 
   // ── Review appointment handler ────────────────────────────────────
   const handleReview = (appointment) => {
-    setReviewAppointment(appointment);
-    setIsReviewModalOpen(true);
+    setManualReviewAppointment(appointment);
+    setIsManualReviewOpen(true);
   };
 
   // ── Close review modal handler ────────────────────────────────────
   const handleCloseReviewModal = () => {
-    setIsReviewModalOpen(false);
-    setReviewAppointment(null);
+    setIsManualReviewOpen(false);
+    setManualReviewAppointment(null);
   };
 
   // ── Cancel appointment handler ────────────────────────────────────
@@ -610,13 +621,27 @@ export default function PatientsAppointments() {
         onUpdated={refreshAll}
       />
 
-      {/* Review Appointment Modal */}
+      {/* Review Appointment Modal (manual "Review" button) */}
       <AppointmentReviewModal
-        isOpen={isReviewModalOpen}
+        isOpen={isManualReviewOpen}
         onClose={handleCloseReviewModal}
-        appointment={reviewAppointment}
+        appointment={manualReviewAppointment}
         patientId={patientId}
+        patientName={patientName}
         onSubmitted={refreshAll}
+      />
+
+      {/* Auto review popup after consultation COMPLETED */}
+      <AppointmentReviewModal
+        isOpen={isAutoReviewOpen}
+        onClose={closeAutoReview}
+        appointment={autoReviewAppointment}
+        patientId={patientId}
+        patientName={patientName}
+        onSubmitted={() => {
+          handleAutoReviewSubmitted();
+          refreshAll();
+        }}
       />
 
       {/* Cancel Confirmation Dialog */}

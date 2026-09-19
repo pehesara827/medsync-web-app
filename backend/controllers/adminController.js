@@ -1,5 +1,6 @@
 import { supabase } from '../supabase.js';
 import * as doctorService from '../services/doctorService.js';
+import { sendReviewRequestNotification } from '../models/appointmentModel.js';
 
 /**
  * Formats a TIME column (HH:MM:SS) into a 12-hour label.
@@ -1898,6 +1899,11 @@ export const confirmScannedAppointment = async (req, res, next) => {
       .maybeSingle();
 
     if (updateError) throw updateError;
+
+    // Fire-and-forget: ask the patient for a review now that the visit is
+    // completed. Helper is idempotent + never throws, so a notify failure
+    // cannot break the collect-reception response.
+    sendReviewRequestNotification(appointmentId);
 
     res.json({
       success: true,

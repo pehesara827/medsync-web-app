@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import { Search, Bell, Settings, Sun, Moon } from 'lucide-react';
+import { Search, Sun, Moon } from 'lucide-react';
 import { useDarkMode } from '../../context/useDarkMode';
 
 // Map route paths to dynamic titles
@@ -53,7 +53,7 @@ export default function AdminTopbar({ onMenuClick, placeholder = 'Search patient
         </div>
       </div>
 
-      {/* Right Controls: Search, Dark Mode, Notifications, Settings & User Avatar - Responsive */}
+      {/* Right Controls: Search, Dark Mode & User Avatar - Responsive */}
       <div className="flex items-center gap-3 md:gap-6 w-full md:w-auto">
         {/* Search Bar - Full width on mobile, fixed on desktop */}
         <div className="relative flex items-center flex-1 md:flex-none">
@@ -73,26 +73,6 @@ export default function AdminTopbar({ onMenuClick, placeholder = 'Search patient
           className="p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
         >
           {darkMode ? <Sun className="w-4 md:w-5 h-4 md:h-5" /> : <Moon className="w-4 md:w-5 h-4 md:h-5" />}
-        </button>
-
-        {/* Notification Icon with Active Indicator Dot */}
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
-        >
-          <Bell className="w-4 md:w-5 h-4 md:h-5" />
-          {/* Active Blue Dot Badge */}
-          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-[#00a8cc] rounded-full ring-1 md:ring-2 ring-white" />
-        </button>
-
-        {/* Settings Icon */}
-        <button
-          type="button"
-          aria-label="Settings"
-          className="p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
-        >
-          <Settings className="w-4 md:w-5 h-4 md:h-5" />
         </button>
 
         {/* User Profile Avatar */}

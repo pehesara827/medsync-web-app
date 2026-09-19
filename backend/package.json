@@ -8,6 +8,8 @@
     "dev": "nodemon index.js",
     "create-tables": "node scripts/createTables.js",
     "add-missed-status": "node scripts/addMissedAppointmentStatus.js",
+    "add-review-request-status": "node scripts/addReviewRequestStatus.js",
+    "add-schedule-delay-columns": "node scripts/addScheduleDelayColumns.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

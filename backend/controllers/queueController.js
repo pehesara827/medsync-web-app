@@ -3,6 +3,7 @@
 // Exposes today's schedules, a full session queue, and the "mark completed"
 // mutation used by the left-hand "Live Queue Stage".
 import { supabase } from '../supabase.js';
+import { sendReviewRequestNotification } from '../models/appointmentModel.js';
 
 /**
  * Validates a value as a UUID v4 (case-insensitive).
@@ -62,12 +63,16 @@ const mapDoctor = (doctor) => ({
 /**
  * GET /api/admin/queue/today
  * Today's schedules (the right-hand "Today's Schedules" list) with doctor
- * details, capacity, booked/seen counts and a derived status.
+ * details, capacity, booked/seen/missed counts and a derived status.
+ *
+ * CANCELLED rows are hidden everywhere in Queue Management. MISSED rows are
+ * shown (per-slot "missed" tally here, "Missed" rows in the session queue)
+ * but excluded from bookedCount — they did not attend.
  *
  * Response shape per session:
  *   { id, tokenPrefix, doctor{ name, specialty, room, avatar },
  *     start, end, startTime, endTime, capacity, bookedCount, seenCount,
- *     status }            <- start/end are ISO datetimes; status is a hint.
+ *     missedCount, status }  <- start/end are ISO datetimes; status is a hint.
  */
 export const getTodayQueue = async (req, res, next) => {
   try {
@@ -102,7 +107,9 @@ export const getTodayQueue = async (req, res, next) => {
 
     const todayIds = (schedules || []).map((s) => s.id);
 
-    // Single extra query to count booked/seen appointments per schedule.
+    // Single extra query to count booked/seen/missed appointments per schedule.
+    // CANCELLED is excluded everywhere; MISSED is tallied separately and does
+    // NOT count as booked (the patient did not attend).
     const countsBySchedule = {};
     if (todayIds.length > 0) {
       const { data: appts, error: apptErr } = await supabase
@@ -115,15 +122,19 @@ export const getTodayQueue = async (req, res, next) => {
       } else {
         (appts || []).forEach((a) => {
           const b = (countsBySchedule[a.schedule_id] =
-            countsBySchedule[a.schedule_id] || { booked: 0, seen: 0 });
-          b.booked += 1;
-          if (a.status === 'COMPLETED') b.seen += 1;
+            countsBySchedule[a.schedule_id] || { booked: 0, seen: 0, missed: 0 });
+          if (a.status === 'MISSED') {
+            b.missed += 1;
+          } else {
+            b.booked += 1;
+            if (a.status === 'COMPLETED') b.seen += 1;
+          }
         });
       }
     }
 
     // Manual walk-ins fold into the matching session (doctor + start_time)
-    // so booked/seen counts include admin-added appointments too.
+    // so booked/seen/missed counts include admin-added appointments too.
     const { data: walkIns, error: walkInErr } = await supabase
       .from('manual_appointments')
       .select('doctor_id, start_time, status')
@@ -140,9 +151,13 @@ export const getTodayQueue = async (req, res, next) => {
         );
         if (!schedule) continue;
         const b = (countsBySchedule[schedule.id] =
-          countsBySchedule[schedule.id] || { booked: 0, seen: 0 });
-        b.booked += 1;
-        if (w.status === 'COMPLETED') b.seen += 1;
+          countsBySchedule[schedule.id] || { booked: 0, seen: 0, missed: 0 });
+        if (w.status === 'MISSED') {
+          b.missed += 1;
+        } else {
+          b.booked += 1;
+          if (w.status === 'COMPLETED') b.seen += 1;
+        }
       }
     }
 
@@ -150,6 +165,7 @@ export const getTodayQueue = async (req, res, next) => {
       const counts = countsBySchedule[s.id] || {
         booked: s.current_appointment ?? 0,
         seen: 0,
+        missed: 0,
       };
       return {
         id: s.id,
@@ -162,6 +178,7 @@ export const getTodayQueue = async (req, res, next) => {
         capacity: s.max_patients ?? 0,
         bookedCount: counts.booked,
         seenCount: counts.seen,
+        missedCount: counts.missed || 0,
         status: deriveStatus(s, now),
         patients: null, // signal: load full queue on selection
       };
@@ -178,10 +195,14 @@ export const getTodayQueue = async (req, res, next) => {
  * GET /api/admin/queue/:scheduleId
  * Full queue for a single schedule — the data backing the left "Live Queue Stage".
  *
+ * CANCELLED appointments are hidden (never enter the queue). MISSED
+ * appointments ARE shown per time slot with missed:true so admins can see
+ * no-shows inline instead of wondering where the patient went.
+ *
  * Response shape:
  *   { session: { id, tokenPrefix, doctor{ name, specialty, room, avatar },
  *     start, end, startTime, endTime, capacity, status,
- *     patients: [ { id, token, name, payment, completed } ] } }
+ *     patients: [ { id, token, name, payment, completed, missed, status } ] } }
  */
 export const getQueueSession = async (req, res, next) => {
   try {
@@ -237,6 +258,7 @@ export const getQueueSession = async (req, res, next) => {
       `,
       )
       .eq('schedule_id', scheduleId)
+      .neq('status', 'CANCELLED')
       .order('created_at', { ascending: true });
 
     if (apptErr) throw apptErr;
@@ -251,12 +273,15 @@ export const getQueueSession = async (req, res, next) => {
             a.patient_profiles.last_name || ''
           }`.trim() || '—';
       }
+      const isMissed = a.status === 'MISSED';
       return {
         id: a.id,
         token: `A-${String(i + 1).padStart(2, '0')}`,
         name,
         payment: mapPaymentStatus(a.payments?.payment_status),
         completed: a.status === 'COMPLETED',
+        missed: isMissed,
+        status: a.status,
       };
     });
 
@@ -274,6 +299,7 @@ export const getQueueSession = async (req, res, next) => {
     if (walkInErr) throw walkInErr;
 
     for (const w of walkIns || []) {
+      const isMissed = w.status === 'MISSED';
       patients.push({
         id: w.id,
         token: `A-${String(patients.length + 1).padStart(2, '0')}`,
@@ -281,6 +307,8 @@ export const getQueueSession = async (req, res, next) => {
           `${w.patient_first_name || ''} ${w.patient_last_name || ''}`.trim() || '—',
         payment: 'Walk-in',
         completed: w.status === 'COMPLETED',
+        missed: isMissed,
+        status: w.status,
         isWalkIn: true,
       });
     }
@@ -312,7 +340,8 @@ export const getQueueSession = async (req, res, next) => {
 /**
  * PATCH /api/admin/queue/:appointmentId/complete
  * Marks a single appointment (a queue entry) as COMPLETED, which advances the
- * live progress bar on the Queue Management page.
+ * live progress bar on the Queue Management page. MISSED rows are refused —
+ * a no-show can only be rebooked, never silently marked seen.
  */
 export const completeAppointment = async (req, res, next) => {
   try {
@@ -327,6 +356,7 @@ export const completeAppointment = async (req, res, next) => {
       .from('appointments')
       .update({ status: 'COMPLETED' })
       .eq('id', appointmentId)
+      .in('status', ['PENDING', 'CONFIRMED'])
       .select('id, status')
       .maybeSingle();
 
@@ -336,12 +366,13 @@ export const completeAppointment = async (req, res, next) => {
     let completedStatus = data?.status;
 
     // Not a public appointment — fall back to manual walk-ins so admins can
-    // advance walk-in queue entries too.
+    // advance walk-in queue entries too. Terminal rows (incl. MISSED) stay put.
     if (!completedId) {
       const { data: manual, error: manualErr } = await supabase
         .from('manual_appointments')
         .update({ status: 'COMPLETED' })
         .eq('id', appointmentId)
+        .in('status', ['PENDING', 'CONFIRMED'])
         .select('id, status')
         .maybeSingle();
 
@@ -352,9 +383,13 @@ export const completeAppointment = async (req, res, next) => {
 
     if (!completedId) {
       return res
-        .status(404)
-        .json({ success: false, message: 'Appointment not found.' });
+        .status(409)
+        .json({ success: false, message: 'Only pending/confirmed queue entries can be marked completed (missed or cancelled visits cannot).' });
     }
+
+    // Fire-and-forget review request for public appointments (walk-ins have
+    // no patient account to notify). Idempotent + never throws.
+    if (data?.id) sendReviewRequestNotification(completedId);
 
     res.json({
       success: true,

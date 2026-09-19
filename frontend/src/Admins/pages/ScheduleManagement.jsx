@@ -21,6 +21,7 @@ import {
   createSchedule,
   fetchAdminDoctors,
   deleteSchedule,
+  broadcastSessionDelay,
 } from '../../components/api/adminScheduleApi';
 
 // ── Today helpers (local YYYY-MM-DD) ──────────────────────────────────
@@ -33,100 +34,13 @@ const toDateStr = (d) =>
 
 const getTodayStr = () => toDateStr(new Date());
 
-const addDaysStr = (baseStr, days) => {
-  const [y, m, d] = baseStr.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + days);
-  return toDateStr(dt);
-};
+// NOTE: This page intentionally has NO mock/offline fallback data. Every row
+// rendered here comes from the backend (`doctor_schedules`), so a failed fetch
+// surfaces as an empty state + error toast instead of fake records that look
+// like real database rows.
 
-const buildMockSchedules = (todayStr) => [
-  {
-    id: 'SCH-1001',
-    doctorName: 'Dr. Sarah Jenkins',
-    doctorSpecialty: 'Neurology',
-    doctorAvatar: 'SJ',
-    availableDate: todayStr,
-    startTime: '09:00 AM',
-    endTime: '12:00 PM',
-    consultationFee: 5000,
-    maxPatients: 10,
-    currentAppointments: 8,
-    isDelayed: false,
-    delayMinutes: 0,
-    isBooked: true,
-  },
-  {
-    id: 'SCH-1002',
-    doctorName: 'Dr. Michael Chen',
-    doctorSpecialty: 'Pediatrics',
-    doctorAvatar: 'MC',
-    availableDate: todayStr,
-    startTime: '10:00 AM',
-    endTime: '01:00 PM',
-    consultationFee: 4500,
-    maxPatients: 12,
-    currentAppointments: 12,
-    isDelayed: true,
-    delayMinutes: 30,
-    isBooked: true,
-  },
-  {
-    id: 'SCH-1003',
-    doctorName: 'Dr. Rachel Vance',
-    doctorSpecialty: 'Orthopedics',
-    doctorAvatar: 'RV',
-    availableDate: todayStr,
-    startTime: '08:00 AM',
-    endTime: '11:30 AM',
-    consultationFee: 5500,
-    maxPatients: 8,
-    currentAppointments: 5,
-    isDelayed: false,
-    delayMinutes: 0,
-    isBooked: false,
-  },
-  {
-    id: 'SCH-1004',
-    doctorName: 'Dr. Priya Fernando',
-    doctorSpecialty: 'Cardiology',
-    doctorAvatar: 'PF',
-    availableDate: addDaysStr(todayStr, 1),
-    startTime: '09:30 AM',
-    endTime: '12:30 PM',
-    consultationFee: 6500,
-    maxPatients: 10,
-    currentAppointments: 3,
-    isDelayed: false,
-    delayMinutes: 0,
-    isBooked: false,
-  },
-  {
-    id: 'SCH-1005',
-    doctorName: 'Dr. Nimal Perera',
-    doctorSpecialty: 'Dermatology',
-    doctorAvatar: 'NP',
-    availableDate: addDaysStr(todayStr, 1),
-    startTime: '02:00 PM',
-    endTime: '05:00 PM',
-    consultationFee: 4000,
-    maxPatients: 10,
-    currentAppointments: 10,
-    isDelayed: true,
-    delayMinutes: 45,
-    isBooked: true,
-  },
-];
-
-// Doctor list for the "Add Schedule" modal dropdown
-const MOCK_DOCTORS = [
-  { id: 'd1', name: 'Dr. Sarah Jenkins', specialty: 'Neurology' },
-  { id: 'd2', name: 'Dr. Michael Chen', specialty: 'Pediatrics' },
-  { id: 'd3', name: 'Dr. Rachel Vance', specialty: 'Orthopedics' },
-  { id: 'd4', name: 'Dr. Priya Fernando', specialty: 'Cardiology' },
-  { id: 'd5', name: 'Dr. Toael Perera', specialty: 'Dermatology' },
-  { id: 'd6', name: 'Dr. Anika Silva', specialty: 'General Medicine' },
-];
+// Doctor list for the "Add Schedule" modal dropdown is loaded from
+// GET /api/admin/doctors — no mock fallback (see note above).
 
 const DELAY_DURATIONS = [
   { label: '15 Mins', minutes: 15 },
@@ -186,7 +100,7 @@ export default function ScheduleManagement() {
   const [todayStr] = useState(() => getTodayStr());
   const [schedules, setSchedules] = useState([]);
   const [loadingSchedules, setLoadingSchedules] = useState(true);
-  const [doctors, setDoctors] = useState(MOCK_DOCTORS); // fallback until API loads
+  const [doctors, setDoctors] = useState([]); // loaded from GET /api/admin/doctors
   const [searchQuery, setSearchQuery] = useState('');
   // View toggle: 'all' (default) = today + future, 'today' = today only.
   const [viewMode, setViewMode] = useState('all');
@@ -224,59 +138,60 @@ export default function ScheduleManagement() {
     toastTimerRef.current = setTimeout(() => setToast(null), 2800);
   };
 
-  // ── Load schedules + approved doctors from the backend on mount ───────
+  // ── Load schedules + approved doctors from the backend ───────────────
+  // Reused on mount and after a create so the table always reflects the
+  // server's computed values (walkIns, capacity, isBooked) — never a
+  // locally-guessed row.
+  const loadSchedules = async () => {
+    try {
+      const [scheduleData, doctorData] = await Promise.all([
+        fetchAdminSchedules(),
+        fetchAdminDoctors(),
+      ]);
+
+      const mapped = (scheduleData || []).map((s) => ({
+        id: s.id,
+        doctorName: s.doctorName || 'Unknown Doctor',
+        doctorSpecialty: s.specialty || '',
+        doctorAvatar: (s.doctorName || '')
+          .replace('Dr. ', '')
+          .split(' ')
+          .map((w) => w && w[0])
+          .join('')
+          .toUpperCase(),
+        availableDate: s.availableDate,
+        startTime: formatTime(s.startTime),
+        endTime: formatTime(s.endTime),
+        consultationFee: Number(s.consultationFee ?? 0),
+        maxPatients: Number(s.maxPatients ?? 1),
+        currentAppointments: Number(s.currentAppointment ?? 0),
+        walkIns: Number(s.walkIns ?? 0),
+        isDelayed: Boolean(s.isDelayed),
+        delayMinutes: Number(s.delayMinutes ?? 0),
+        isBooked: Boolean(s.isBooked),
+      }));
+
+      setSchedules(mapped);
+      setDoctors(Array.isArray(doctorData) ? doctorData : []);
+      return true;
+    } catch {
+      // No mock fallback: clear the table so the empty state shows and the
+      // admin knows the data could not be read (nothing is silently faked).
+      setSchedules([]);
+      showToast('Could not load schedules from the server. Please retry.', 'error');
+      return false;
+    } finally {
+      setLoadingSchedules(false);
+    }
+  };
+
   useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const [scheduleData, doctorData] = await Promise.all([
-          fetchAdminSchedules(),
-          fetchAdminDoctors(),
-        ]);
-        if (cancelled) return;
-
-        const mapped = (scheduleData || []).map((s) => ({
-          id: s.id,
-          doctorName: s.doctorName || 'Unknown Doctor',
-          doctorSpecialty: s.specialty || '',
-          doctorAvatar: (s.doctorName || '')
-            .replace('Dr. ', '')
-            .split(' ')
-            .map((w) => w && w[0])
-            .join('')
-            .toUpperCase(),
-          availableDate: s.availableDate,
-          startTime: formatTime(s.startTime),
-          endTime: formatTime(s.endTime),
-          consultationFee: Number(s.consultationFee ?? 0),
-          maxPatients: Number(s.maxPatients ?? 1),
-          currentAppointments: Number(s.currentAppointment ?? 0),
-          walkIns: Number(s.walkIns ?? 0),
-          isDelayed: Boolean(s.isDelayed),
-          delayMinutes: Number(s.delayMinutes ?? 0),
-          isBooked: Boolean(s.isBooked),
-        }));
-
-        if (cancelled) return;
-        setSchedules(mapped);
-        if (Array.isArray(doctorData) && doctorData.length > 0) {
-          setDoctors(doctorData);
-        }
-      } catch {
-        if (cancelled) return;
-        // Fall back to mock data (today + tomorrow) so the page still renders offline.
-        setSchedules(buildMockSchedules(getTodayStr()));
-        showToast('Could not load schedules. Showing offline data.', 'error');
-      } finally {
-        if (!cancelled) setLoadingSchedules(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
+    // Async IIFE keeps setState out of the synchronous effect body
+    // (react-hooks/set-state-in-effect).
+    (async () => {
+      await loadSchedules();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // ── Today + upcoming only ──────────────────────────────────────────
   // Past schedules (availableDate < today) are never shown or counted.
@@ -314,10 +229,11 @@ export default function ScheduleManagement() {
         s.doctorSpecialty.toLowerCase().includes(q);
 
       // Priority: specific picked date > Today toggle > All upcoming.
-      let matchesDate = true;
-      if (dateFilter) matchesDate = s.availableDate === dateFilter;
-      else if (viewMode === 'today') matchesDate = s.availableDate === todayStr;
-      else matchesDate = s.availableDate >= todayStr;
+      const matchesDate = dateFilter
+        ? s.availableDate === dateFilter
+        : viewMode === 'today'
+          ? s.availableDate === todayStr
+          : s.availableDate >= todayStr;
 
       let matchesStatus = true;
       if (statusFilter === 'delayed') matchesStatus = s.isDelayed;
@@ -332,11 +248,14 @@ export default function ScheduleManagement() {
     e.preventDefault();
     const form = new FormData(e.target);
 
-    const doctorName = form.get('doctor');
-    const doctor = doctors.find((d) => d.name === doctorName);
+    // The dropdown now submits the doctor's UUID (option value={d.id}) so the
+    // backend can resolve doctor_profiles directly — no name matching, which
+    // broke for duplicate doctor names.
+    const doctorId = form.get('doctor');
+    const doctor = doctors.find((d) => d.id === doctorId);
 
     const payload = {
-      doctor_id: doctor ? doctor.id : null,
+      doctor_id: doctorId || null,
       available_date: form.get('date') || todayStr,
       start_time: form.get('startTime') || '09:00',
       end_time: form.get('endTime') || '12:00',
@@ -344,7 +263,7 @@ export default function ScheduleManagement() {
       max_patients: Number(form.get('maxPatients')) || 1,
     };
 
-    if (!payload.doctor_id) {
+    if (!doctorId || !doctor) {
       showToast('Please select a valid doctor.', 'error');
       return;
     }
@@ -361,43 +280,16 @@ export default function ScheduleManagement() {
     setSubmittingCreate(true);
 
     try {
-      const result = await createSchedule(payload);
-      const created = result.data;
+      await createSchedule(payload);
 
-      const avatar = (doctorName || '')
-        .replace('Dr. ', '')
-        .split(' ')
-        .map((w) => w && w[0])
-        .join('')
-        .toUpperCase();
-
-      const newRow = {
-        id: created.id,
-        doctorName: doctor?.name || doctorName || 'Unknown Doctor',
-        doctorSpecialty: doctor?.specialty || '',
-        doctorAvatar: avatar,
-        availableDate: created.available_date || payload.available_date,
-        startTime: formatTime(created.start_time || payload.start_time),
-        endTime: formatTime(created.end_time || payload.end_time),
-        consultationFee: Number(
-          created.consultation_fee ?? payload.consultation_fee ?? 0
-        ),
-        maxPatients: Number(
-          created.max_patients ?? payload.max_patients ?? 1
-        ),
-        currentAppointments: Number(created.current_appointment ?? 0),
-        walkIns: Number(created.walkIns ?? 0),
-        isDelayed: Boolean(created.is_delayed ?? false),
-        delayMinutes: Number(created.delay_minutes ?? 0),
-        isBooked: Boolean(created.is_booked ?? false),
-      };
-
-      // Add the new schedule to the table and show a success popup.
-      setSchedules((prev) => [...prev, newRow]);
+      // Re-read from the server so the row carries the authoritative values
+      // (walkIns, currentAppointment, isBooked, delay state) instead of a
+      // locally-guessed copy.
+      await loadSchedules();
       setIsAddModalOpen(false);
       showToast(
-        `Schedule created successfully for ${newRow.doctorName} on ${formatDate(
-          newRow.availableDate
+        `Schedule created successfully for ${doctor.name} on ${formatDate(
+          payload.available_date
         )}.`
       );
     } catch (err) {
@@ -704,7 +596,11 @@ export default function ScheduleManagement() {
               {!loadingSchedules && filteredSchedules.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center">
-                    <p className="text-sm text-slate-400 dark:text-slate-500">No schedules match your filters.</p>
+                    <p className="text-sm text-slate-400 dark:text-slate-500">
+                      {schedules.length === 0
+                        ? 'No schedules found. Use "Add New Schedule" to create the first slot.'
+                        : 'No schedules match your filters.'}
+                    </p>
                   </td>
                 </tr>
               )}
@@ -739,14 +635,28 @@ export default function ScheduleManagement() {
               <form onSubmit={handleCreateSchedule} className="px-6 py-5 space-y-4">
                 <div>
                   <label className={labelClass}>Doctor</label>
-                  <select name="doctor" required className={inputClass} defaultValue="">
-                    <option value="" disabled>Select a doctor...</option>
+                  <select
+                    name="doctor"
+                    required
+                    className={inputClass}
+                    defaultValue=""
+                    disabled={doctors.length === 0}
+                  >
+                    <option value="" disabled>
+                      {doctors.length === 0 ? 'No approved doctors available' : 'Select a doctor...'}
+                    </option>
                     {doctors.map((d) => (
-                      <option key={d.id} value={d.name}>
+                      <option key={d.id} value={d.id}>
                         {d.name} · {d.specialty}
                       </option>
                     ))}
                   </select>
+                  {doctors.length === 0 && (
+                    <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                      No approved doctors available — approve a doctor first, then add a schedule.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -785,7 +695,7 @@ export default function ScheduleManagement() {
                   </button>
                   <button
                     type="submit"
-                    disabled={submittingCreate}
+                    disabled={submittingCreate || doctors.length === 0}
                     className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-[#00a8cc] text-white hover:bg-[#0092b3] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:pointer-events-none transition"
                   >
                     {submittingCreate ? (
@@ -872,6 +782,19 @@ export default function ScheduleManagement() {
         <SessionDelayDrawer
           schedule={selectedScheduleForDelay}
           onClose={() => setSelectedScheduleForDelay(null)}
+          onBroadcasted={(updatedSchedule, count) => {
+            if (updatedSchedule) {
+              const delayMinutes = Number(updatedSchedule.delayMinutes ?? 0);
+              const isDelayed = Boolean(updatedSchedule.isDelayed ?? delayMinutes > 0);
+              setSchedules((prev) =>
+                prev.map((s) =>
+                  s.id === selectedScheduleForDelay.id ? { ...s, isDelayed, delayMinutes } : s
+                )
+              );
+              setSelectedScheduleForDelay((prev) => (prev ? { ...prev, isDelayed, delayMinutes } : prev));
+            }
+            showToast(`Delay broadcast sent — ${count} patient${count === 1 ? '' : 's'} + doctor notified.`, 'success');
+          }}
         />
       )}
 
@@ -901,11 +824,32 @@ export default function ScheduleManagement() {
 }
 
 // ── E. Delay Broadcaster Slide-Over Panel ────────────────────────────────
-function SessionDelayDrawer({ schedule, onClose }) {
+// Persists the delay on doctor_schedules and notifies booked patients +
+// doctor via POST /api/admin/schedules/:id/broadcast-delay.
+function SessionDelayDrawer({ schedule, onClose, onBroadcasted }) {
   const [duration, setDuration] = useState(DELAY_DURATIONS[1].minutes); // default 30 Mins
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [notifiedCount, setNotifiedCount] = useState(0);
 
   const isDelayed = schedule.isDelayed;
+
+  const handleBroadcast = async () => {
+    setSending(true);
+    setSendError('');
+    try {
+      const result = await broadcastSessionDelay(schedule.id, duration);
+      const count = result?.data?.notifiedCount ?? 0;
+      setNotifiedCount(count);
+      setSent(true);
+      if (onBroadcasted) onBroadcasted(result?.data?.schedule || null, count);
+    } catch (err) {
+      setSendError(err.message || 'Failed to broadcast delay.');
+    } finally {
+      setSending(false);
+    }
+  };
 
   return createPortal(
     <div className="fixed inset-0 z-[120]">
@@ -980,20 +924,39 @@ function SessionDelayDrawer({ schedule, onClose }) {
           <div className="mt-6 flex gap-3 rounded-xl bg-[#e0f5f8] dark:bg-cyan-500/10 border border-[#00a8cc]/20 p-4">
             <Megaphone className="w-5 h-5 text-[#00a8cc] dark:text-cyan-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              This will automatically update patient queues and dispatch in-app
-              notifications to patients waiting for this session.
+              This will save the delay on the schedule and dispatch in-app
+              notifications to booked patients for this session, plus the doctor.
             </p>
           </div>
+
+          {sendError && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10 px-4 py-3 text-xs text-rose-700 dark:text-rose-300">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              {sendError}
+            </div>
+          )}
+
+          {sent && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-xs text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              Delay broadcast sent — {notifiedCount} patient{notifiedCount === 1 ? '' : 's'} + doctor notified.
+            </div>
+          )}
         </div>
 
         <div className="px-6 py-5 border-t border-slate-100 dark:border-slate-700">
           <button
             type="button"
-            disabled={sent}
-            onClick={() => setSent(true)}
+            disabled={sending || sent}
+            onClick={handleBroadcast}
             className="w-full inline-flex items-center justify-center gap-2 py-3.5 rounded-xl bg-[#00a8cc] text-white font-medium hover:bg-[#0092b3] disabled:opacity-70 transition"
           >
-            {sent ? (
+            {sending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Broadcasting...
+              </>
+            ) : sent ? (
               <>
                 <CheckCircle2 className="w-4 h-4" />
                 Delay Broadcast Sent ✓

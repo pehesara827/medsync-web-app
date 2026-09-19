@@ -494,18 +494,157 @@ export const updateAppointment = async (appointmentId, updateData) => {
 };
 
 /**
+ * Shared helper: send the "Hi {patient}, thank you for visiting MedSync Clinic
+ * today. How was your visit with Dr. {doctor}?" in-app review request.
+ *
+ * Idempotent — if a REVIEW_REQUEST notification already exists for this
+ * appointment it is returned untouched instead of creating a duplicate.
+ * Never throws: notification failure must not break appointment completion.
+ *
+ * @param {string} appointmentId - appointments.id that just became COMPLETED
+ * @returns {Promise<Object|null>} the notification (new or existing)
+ */
+export const sendReviewRequestNotification = async (appointmentId) => {
+  if (!appointmentId) return null;
+  try {
+    const { data: appointment, error } = await supabase
+      .from('appointments')
+      .select(
+        `
+        id,
+        appointment_date,
+        doctor_id,
+        patient_id,
+        patient_profiles ( user_id, first_name, last_name ),
+        doctor_profiles ( first_name, last_name ),
+        doctor_schedules ( start_time, end_time )
+      `
+      )
+      .eq('id', appointmentId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!appointment) return null;
+
+    const userId = appointment.patient_profiles?.user_id;
+    if (!userId) return null;
+
+    // Idempotency: one REVIEW_REQUEST per appointment.
+    const { data: existing, error: existingError } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('type', 'REVIEW_REQUEST')
+      .contains('metadata', { appointment_id: appointmentId })
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingError && existing) return existing;
+
+    const patientFirstName = appointment.patient_profiles?.first_name || 'there';
+    const doctorName =
+      `Dr. ${appointment.doctor_profiles?.first_name || ''} ${appointment.doctor_profiles?.last_name || ''}`.trim() ||
+      'your doctor';
+
+    return await createNotification({
+      user_id: userId,
+      type: 'REVIEW_REQUEST',
+      title: 'How was your visit?',
+      message: `Hi ${patientFirstName}, thank you for visiting MedSync Clinic today. How was your visit with ${doctorName}?`,
+      action_link: `/patient/appointments?review=${appointmentId}`,
+      metadata: {
+        appointment_id: appointmentId,
+        doctor_id: appointment.doctor_id,
+        appointment_date: appointment.appointment_date,
+      },
+    });
+  } catch (notifError) {
+    console.error(
+      `[ReviewRequest] Notification failed for appointment ${appointmentId}:`,
+      notifError.message
+    );
+    return null;
+  }
+};
+
+/**
+ * Backfill sweep: notify every recently COMPLETED appointment (last 7 days)
+ * that has no review and no REVIEW_REQUEST notification yet.
+ * Idempotent — safe to run on an interval.
+ *
+ * @returns {Promise<number>} Number of review requests sent
+ */
+export const sendPendingReviewRequests = async () => {
+  try {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+
+    const { data: completed, error } = await supabase
+      .from('appointments')
+      .select('id, appointment_date')
+      .eq('status', 'COMPLETED')
+      .gte('appointment_date', weekAgoStr);
+
+    if (error) throw error;
+    if (!completed || completed.length === 0) return 0;
+
+    const ids = completed.map((a) => a.id);
+
+    const { data: reviews, error: reviewError } = await supabase
+      .from('doctor_reviews')
+      .select('appointment_id')
+      .in('appointment_id', ids);
+    if (reviewError) throw reviewError;
+    const reviewedIds = new Set((reviews || []).map((r) => r.appointment_id));
+
+    const { data: notified, error: notifiedError } = await supabase
+      .from('notifications')
+      .select('metadata')
+      .eq('type', 'REVIEW_REQUEST');
+    if (notifiedError) throw notifiedError;
+    const notifiedIds = new Set(
+      (notified || [])
+        .map((n) => n.metadata?.appointment_id)
+        .filter(Boolean)
+    );
+
+    let sent = 0;
+    for (const appt of completed) {
+      if (reviewedIds.has(appt.id) || notifiedIds.has(appt.id)) continue;
+      const result = await sendReviewRequestNotification(appt.id);
+      if (result) {
+        sent += 1;
+        notifiedIds.add(appt.id);
+      }
+    }
+    if (sent > 0) {
+      console.log(`[ReviewRequestSweep] Sent ${sent} review request(s).`);
+    }
+    return sent;
+  } catch (error) {
+    console.error('[ReviewRequestSweep] Failed:', error.message);
+    return 0;
+  }
+};
+
+/**
  * Marks past-due appointments as MISSED and notifies each patient.
  *
- * Rule (next-day midnight): any appointment still in PENDING/CONFIRMED
- * whose appointment_date is before TODAY is a no-show. The sweep:
+ * Two rules (both idempotent — only PENDING/CONFIRMED rows ever match):
+ *   1. Next-day midnight: appointment_date is before TODAY (catch-all).
+ *   2. Slot-end: appointment_date is TODAY and the linked
+ *      doctor_schedules.end_time has passed (with MISSED_GRACE_MINUTES buffer
+ *      so a slightly overrunning session is not marked prematurely).
+ * Never touches CANCELLED/COMPLETED/MISSED — and nothing here ever writes
+ * CANCELLED; MISSED is the terminal no-show state.
+ *
+ * Each pass:
  *   1. Selects those rows (joined with patient user_id + doctor/schedule
  *      labels for the notification message).
  *   2. Batch-updates them to status='MISSED' with a fresh updated_at so
- *      they surface in Recent Activity with a "Missed" badge.
+ *      they surface in Recent Activity with a "Missed" badge and in the
+ *      admin Queue Management slot queue.
  *   3. Sends one APPOINTMENT_MISSED in-app notification per patient.
- *
- * Idempotent: only PENDING/CONFIRMED rows match, so reruns and overlapping
- * scheduler ticks never double-mark or double-notify.
  *
  * @returns {Promise<number>} Number of appointments marked MISSED
  */
@@ -516,7 +655,14 @@ export const markMissedAppointments = async () => {
   const dd = String(today.getDate()).padStart(2, '0');
   const todayStr = `${yyyy}-${mm}-${dd}`;
 
-  const { data: overdue, error: fetchError } = await supabase
+  // Local HH:MM of "now minus grace" — compared as strings against TIME cols.
+  const MISSED_GRACE_MINUTES = 15;
+  const graceDate = new Date(today.getTime() - MISSED_GRACE_MINUTES * 60 * 1000);
+  const graceTimeStr = `${String(graceDate.getHours()).padStart(2, '0')}:${String(
+    graceDate.getMinutes()
+  ).padStart(2, '0')}`;
+
+  const { data: active, error: fetchError } = await supabase
     .from('appointments')
     .select(
       `
@@ -527,11 +673,22 @@ export const markMissedAppointments = async () => {
       doctor_schedules ( start_time, end_time )
     `
     )
-    .in('status', ['PENDING', 'CONFIRMED'])
-    .lt('appointment_date', todayStr);
+    .in('status', ['PENDING', 'CONFIRMED']);
 
   if (fetchError) throw fetchError;
-  if (!overdue || overdue.length === 0) return 0;
+  if (!active || active.length === 0) return 0;
+
+  // Split into overdue (past dates) + slot-ended (today, end_time + grace passed).
+  const overdue = active.filter((a) => {
+    if (!a.appointment_date) return false;
+    if (a.appointment_date < todayStr) return true;
+    if (a.appointment_date > todayStr) return false;
+    const endTime = a.doctor_schedules?.end_time;
+    if (!endTime) return false; // no slot info — leave for the midnight rule
+    return endTime <= graceTimeStr;
+  });
+
+  if (overdue.length === 0) return 0;
 
   const ids = overdue.map((a) => a.id);
   const { error: updateError } = await supabase

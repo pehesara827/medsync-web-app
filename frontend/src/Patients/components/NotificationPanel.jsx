@@ -9,6 +9,7 @@ import {
   Calendar,
   CheckCheck,
   Info,
+  Star,
   MoreVertical,
   Trash2,
   Loader,
@@ -32,6 +33,7 @@ const TYPE_CONFIG = {
   APPOINTMENT_MISSED: { Icon: Calendar, color: 'text-orange-500', badge: 'bg-orange-50 dark:bg-orange-950/30' },
   SESSION_DELAY: { Icon: Clock, color: 'text-orange-500', badge: 'bg-orange-50 dark:bg-orange-950/30' },
   PAYMENT_RECEIVED: { Icon: Info, color: 'text-cyan-500', badge: 'bg-cyan-50 dark:bg-cyan-950/30' },
+  REVIEW_REQUEST: { Icon: Star, color: 'text-amber-500', badge: 'bg-amber-50 dark:bg-amber-950/30' },
 };
 
 /**

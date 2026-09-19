@@ -27,7 +27,7 @@ import scheduleRoutes from './routes/scheduleRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import { expireExpiredOffers } from './models/waitlistModel.js';
-import { markMissedAppointments } from './models/appointmentModel.js';
+import { markMissedAppointments, sendPendingReviewRequests } from './models/appointmentModel.js';
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -146,6 +146,23 @@ const runMissedSweep = async () => {
   }
 };
 
+// ── Review-Request Sweeper ──────────────────────────────────────────────
+// Runs every 10 minutes. Any COMPLETED appointment from the last 7 days with
+// no review and no REVIEW_REQUEST notification gets one review request.
+// Idempotent: reviewed / already-notified rows are skipped.
+const REVIEW_SWEEP_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
+const runReviewSweep = async () => {
+  try {
+    const sentCount = await sendPendingReviewRequests();
+    if (sentCount > 0) {
+      console.log(`[Scheduler] Sent ${sentCount} review request(s).`);
+    }
+  } catch (error) {
+    console.error('[Scheduler] Error running review-request sweep:', error.message);
+  }
+};
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
@@ -158,4 +175,8 @@ app.listen(PORT, () => {
   setTimeout(runMissedSweep, 20 * 1000);
   setInterval(runMissedSweep, MISSED_SWEEP_INTERVAL_MS);
   console.log(`[Scheduler] Missed-appointment sweep scheduled every ${MISSED_SWEEP_INTERVAL_MS / 60000} minutes.`);
+
+  setTimeout(runReviewSweep, 30 * 1000);
+  setInterval(runReviewSweep, REVIEW_SWEEP_INTERVAL_MS);
+  console.log(`[Scheduler] Review-request sweep scheduled every ${REVIEW_SWEEP_INTERVAL_MS / 60000} minutes.`);
 });

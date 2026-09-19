@@ -85,6 +85,7 @@ const mapHeaderToSession = (header) => ({
   capacity: header.capacity ?? 0,
   bookedCount: header.bookedCount,
   seenCount: header.seenCount,
+  missedCount: header.missedCount ?? 0,
   status: header.status,
   patients: null,
 });
@@ -151,7 +152,9 @@ export default function QueueManagement() {
   }, [now, schedules, selectedId]);
 
   // Lazily load the full patient queue for the selected session the first time
-  // it becomes active. Subsequent re-renders reuse the cached patients.
+  // it becomes active. Re-poll every 2 minutes while the stage is open so
+  // MISSED rows marked at slot-end appear without a manual reload (the sweeper
+  // runs every 10 min; polling here picks them up shortly after).
   useEffect(() => {
     if (!selectedId) return;
     const cur = schedules.find((s) => s.id === selectedId);
@@ -183,6 +186,32 @@ export default function QueueManagement() {
     };
   }, [selectedId, schedules]);
 
+  // Stage refresh: re-fetch the open session's queue periodically so missed
+  // visits (marked by the slot-end sweeper) show up live on the stage.
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    const id = setInterval(async () => {
+      try {
+        const full = await fetchQueueSession(selectedId);
+        setSchedules((prev) =>
+          prev.map((s) =>
+            s.id === selectedId
+              ? {
+                  ...full,
+                  start: new Date(full.start),
+                  end: new Date(full.end),
+                  tokenPrefix: s.tokenPrefix,
+                }
+              : s,
+          ),
+        );
+      } catch (err) {
+        console.warn('[Queue] Stage refresh failed.', err.message);
+      }
+    }, 2 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [selectedId]);
+
   const liveSessions = useMemo(
     () => schedules.map((s) => ({ ...s, status: getSessionStatus(s, now) })),
     [schedules, now],
@@ -190,7 +219,7 @@ export default function QueueManagement() {
   const selected = liveSessions.find((s) => s.id === selectedId);
 
   const handleMarkCompleted = async (patient) => {
-    if (!selected || !patient) return;
+    if (!selected || !patient || patient.missed) return;
     // Optimistic local update — mark the row complete immediately.
     setSchedules((prev) =>
       prev.map((s) =>
@@ -333,9 +362,11 @@ function StatusPill({ status, session, now }) {
 function ActiveSessionCard({ session, now, onMarkCompleted }) {
   const { doctor, status } = session;
   const completed = session.patients.filter((p) => p.completed).length;
+  const missed = session.patients.filter((p) => p.missed).length;
   const total = session.patients.length;
   const pct = total ? Math.round((completed / total) * 100) : 0;
-  const waiting = total - completed;
+  // Missed no-shows are shown inline but excluded from the waiting tally.
+  const waiting = session.patients.filter((p) => !p.completed && !p.missed).length;
   const paid = session.patients.filter((p) => p.payment === 'Paid').length;
   // Walk-ins have no payment record — exclude them from the Unpaid tally.
   const pending = session.patients.filter(
@@ -423,6 +454,14 @@ function ActiveSessionCard({ session, now, onMarkCompleted }) {
           <span>Paid: {paid}</span>
           <span>·</span>
           <span>Unpaid: {pending}</span>
+          {missed > 0 && (
+            <>
+              <span>·</span>
+              <span className="font-medium text-red-500 dark:text-red-400">
+                Missed: {missed}
+              </span>
+            </>
+          )}
         </div>
         {pct === 100 && status === 'Active' && (
           <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
@@ -478,14 +517,17 @@ function QueueTable({ session, now, canEdit, onMarkCompleted }) {
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
             {session.patients.map((p) => {
-              const isNext = !p.completed;
+              const isMissed = Boolean(p.missed);
+              const isNext = !p.completed && !isMissed;
               return (
                 <tr
                   key={p.id}
                   className={`transition-colors ${
-                    isNext && canEdit
-                      ? 'bg-[#e0f5f8]/50 dark:bg-slate-700/50'
-                      : 'bg-white dark:bg-slate-800'
+                    isMissed
+                      ? 'bg-red-50/60 dark:bg-red-950/20'
+                      : isNext && canEdit
+                        ? 'bg-[#e0f5f8]/50 dark:bg-slate-700/50'
+                        : 'bg-white dark:bg-slate-800'
                   }`}
                 >
                   <td className="px-3 py-2.5">
@@ -497,10 +539,17 @@ function QueueTable({ session, now, canEdit, onMarkCompleted }) {
                     <div className="flex items-center gap-2">
                       <UserRound className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600" />
                       <span className="flex items-center gap-1.5">
-                        {p.name}
+                        <span className={isMissed ? 'line-through text-slate-400 dark:text-slate-500' : ''}>
+                          {p.name}
+                        </span>
                         {p.isWalkIn && (
                           <span className="text-[9px] font-semibold bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-200 px-1.5 py-0.5 rounded">
                             WALK-IN
+                          </span>
+                        )}
+                        {isMissed && (
+                          <span className="text-[9px] font-semibold bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400 px-1.5 py-0.5 rounded">
+                            MISSED
                           </span>
                         )}
                         {isNext && canEdit && (
@@ -522,6 +571,10 @@ function QueueTable({ session, now, canEdit, onMarkCompleted }) {
                     {p.completed ? (
                       <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
                         ✓ Seen
+                      </span>
+                    ) : isMissed ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-red-500 dark:text-red-400">
+                        Missed visit
                       </span>
                     ) : canEdit ? (
                                             <button
@@ -628,9 +681,10 @@ function TodayScheduleList({ sessions, selectedId, onSelect, now, loading }) {
       </div>
       <div className="space-y-2 overflow-y-auto">
         {ordered.map((s) => {
-                    const { doctor, status } = s;
+          const { doctor, status } = s;
           const booked = s.bookedCount ?? s.patients?.length ?? 0;
           const seen = s.seenCount ?? s.patients?.filter((p) => p.completed).length ?? 0;
+          const missed = s.missedCount ?? s.patients?.filter((p) => p.missed).length ?? 0;
           const fillPct = s.capacity ? Math.round((booked / s.capacity) * 100) : 0;
           const isSelected = selectedId === s.id;
           const startingSoon =
@@ -699,6 +753,11 @@ function TodayScheduleList({ sessions, selectedId, onSelect, now, loading }) {
                   <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                     <span>
                       {booked}/{s.capacity} booked · {seen} seen
+                      {missed > 0 && (
+                        <span className="font-medium text-red-500 dark:text-red-400">
+                          {' '}· {missed} missed
+                        </span>
+                      )}
                     </span>
                     <span>{fillPct}% capacity</span>
                   </div>

@@ -167,6 +167,18 @@ export const createSchedule = async (req, res, next) => {
         .status(400)
         .json({ success: false, message: 'available_date must be a valid date (YYYY-MM-DD).' });
     }
+    // No past-dated slots: mirrors the client `min` rule so the API can't be
+    // used to create a schedule for a day that has already passed.
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate()
+    ).padStart(2, '0')}`;
+    if (available_date < todayStr) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot create a schedule in the past. Please pick today or a future date.',
+      });
+    }
 
     // ── start_time / end_time (HH:MM or HH:MM:SS) ────────────────────
     if (!start_time) {
@@ -251,15 +263,18 @@ export const createSchedule = async (req, res, next) => {
       });
     }
 
-    // Insert the new schedule slot
+    // Insert the new schedule slot. Times are normalised to HH:MM:SS so the
+    // stored value and the API response are always the same shape.
+    const normalizeTime = (t) => (t.length === 5 ? `${t}:00` : t);
+
     const { data: schedule, error } = await supabase
       .from('doctor_schedules')
       .insert([
         {
           doctor_id,
           available_date,
-          start_time,
-          end_time,
+          start_time: normalizeTime(start_time),
+          end_time: normalizeTime(end_time),
           consultation_fee: numericFee,
           max_patients: numericMax,
           current_appointment: 0,
@@ -282,9 +297,10 @@ export const createSchedule = async (req, res, next) => {
 };
 /**
  * POST /api/schedules/:scheduleId/broadcast-delay
- * Records a delay on a schedule slot and broadcasts a SESSION_DELAY
- * notification to every patient with an active (non-cancelled) appointment
- * on that slot.
+ * Records a delay on a schedule slot (doctor_schedules.delay_minutes /
+ * is_delayed / delay_reported_at) and broadcasts a SESSION_DELAY
+ * notification to every patient with an ACTIVE (PENDING/CONFIRMED)
+ * appointment on that slot, plus the slot's doctor.
  *
  * Body: { minutes }  – non-negative integer (0 clears the delay)
  */
@@ -336,8 +352,9 @@ export const broadcastSessionDelay = async (req, res, next) => {
       throw updateError;
     }
 
-    // 2. Fetch all active appointments for this schedule, joining the
-    //    patient's user_id (for notification delivery).
+    // 2. Fetch all ACTIVE appointments for this schedule, joining the
+    //    patient's user_id (for notification delivery). Terminal rows
+    //    (COMPLETED / MISSED / CANCELLED) are left untouched.
     const { data: appointments, error: apptsError } = await supabase
       .from('appointments')
       .select(
@@ -347,7 +364,7 @@ export const broadcastSessionDelay = async (req, res, next) => {
       `
       )
       .eq('schedule_id', scheduleId)
-      .neq('status', 'CANCELLED');
+      .in('status', ['PENDING', 'CONFIRMED']);
 
     if (apptsError) throw apptsError;
 
@@ -392,6 +409,43 @@ export const broadcastSessionDelay = async (req, res, next) => {
       insertedNotifications = inserted || [];
     }
 
+    // 5. Notify the slot's doctor (best effort — never fails the broadcast).
+    //    Resolves doctor_profiles.user_id via the schedule's doctor_id.
+    let notifiedDoctor = false;
+    try {
+      const { data: doctor, error: doctorError } = await supabase
+        .from('doctor_profiles')
+        .select('id, user_id, first_name, last_name')
+        .eq('id', schedule.doctor_id)
+        .maybeSingle();
+
+      if (!doctorError && doctor?.user_id) {
+        const doctorName =
+          `Dr. ${doctor.first_name || ''} ${doctor.last_name || ''}`.trim() || 'Doctor';
+        await createNotification({
+          user_id: doctor.user_id,
+          type: 'SESSION_DELAY',
+          title:
+            delayMinutes > 0
+              ? `Session delayed by ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'}`
+              : 'Session back on schedule',
+          message:
+            delayMinutes > 0
+              ? `Hi ${doctorName}, your session on ${sessionLabel} is delayed by approximately ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'}. ${userIds.length} booked patient${userIds.length === 1 ? ' has' : 's have'} been notified.`
+              : `Hi ${doctorName}, your session on ${sessionLabel} is back on schedule. Thank you for your patience.`,
+          action_link: '/doctor/schedule-manager',
+          metadata: {
+            schedule_id: schedule.id,
+            delay_minutes: delayMinutes,
+            notified_count: userIds.length,
+          },
+        });
+        notifiedDoctor = true;
+      }
+    } catch (doctorNotifError) {
+      console.error('[BroadcastDelay] Doctor notification failed:', doctorNotifError.message);
+    }
+
     res.json({
       success: true,
       data: {
@@ -407,6 +461,7 @@ export const broadcastSessionDelay = async (req, res, next) => {
         },
         notifiedUsers: userIds,
         notifiedCount: insertedNotifications.length,
+        notifiedDoctor,
       },
     });
   } catch (error) {

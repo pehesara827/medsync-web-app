@@ -76,3 +76,23 @@ export const deleteSchedule = async (scheduleId) => {
   }
   return json;
 };
+
+/**
+ * POST /api/admin/schedules/:scheduleId/broadcast-delay
+ * Persists the delay on doctor_schedules and notifies booked patients + doctor.
+ * @param {string} scheduleId
+ * @param {number} minutes - non-negative integer (0 clears the delay)
+ * @returns {Promise<{success: boolean, data: { schedule, notifiedUsers, notifiedCount, notifiedDoctor }}>}
+ */
+export const broadcastSessionDelay = async (scheduleId, minutes) => {
+  const res = await fetch(`${API_BASE_URL}/admin/schedules/${scheduleId}/broadcast-delay`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ minutes }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(json.message || `Failed to broadcast delay (HTTP ${res.status})`);
+  }
+  return json;
+};
