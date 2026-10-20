@@ -1,0 +1,89 @@
+import { useLocation } from 'react-router-dom';
+import { Search, Sun, Moon } from 'lucide-react';
+import { useDarkMode } from '../../context/useDarkMode';
+
+// Map route paths to dynamic titles
+const PAGE_TITLES = {
+  '/admin': 'Dashboard',
+  '/admin/queue-management': 'Queue Management',
+  '/admin/scan-qr': 'Scan QR',
+  '/admin/patient-records': 'Patient Records',
+  '/admin/schedule-delays': 'Schedule Management',
+  '/admin/staff-management': 'Staff Management',
+  '/admin/payments': 'Payments',
+};
+
+export default function AdminTopbar({ onMenuClick, placeholder = 'Search patients, records...' }) {
+  const { darkMode, toggleDarkMode } = useDarkMode();
+  const location = useLocation();
+
+  // Get current page title dynamically from route
+  const currentTitle =
+    PAGE_TITLES[location.pathname] ||
+    location.pathname.replace('/admin/', '').replace('-', ' ') ||
+    'Dashboard';
+
+  return (
+    <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200/80 dark:border-slate-700/80 px-4 md:px-8 py-2.5 md:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 select-none sticky top-0 z-10">
+      {/* Left: Hamburger + Title */}
+      <div className="flex items-center gap-3">
+        {/* Mobile Hamburger Button */}
+        {onMenuClick && (
+          <button
+            type="button"
+            onClick={onMenuClick}
+            aria-label="Open menu"
+            className="md:hidden p-2 -ml-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        )}
+        <div>
+          <h1 className="text-lg md:text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight capitalize">
+            {currentTitle}
+          </h1>
+        </div>
+      </div>
+
+      {/* Right Controls: Search, Dark Mode & User Avatar - Responsive */}
+      <div className="flex items-center gap-3 md:gap-6 w-full md:w-auto">
+        {/* Search Bar - Full width on mobile, fixed on desktop */}
+        <div className="relative flex items-center flex-1 md:flex-none">
+          <Search className="w-3.5 md:w-4 h-3.5 md:h-4 text-slate-400 absolute left-3 md:left-3.5 pointer-events-none" />
+          <input
+            type="text"
+            placeholder={placeholder}
+            className="w-full md:w-64 bg-slate-100/80 dark:bg-slate-700/80 text-xs md:text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-400 pl-8 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 rounded-full border border-transparent focus:outline-none focus:bg-white dark:focus:bg-slate-700 focus:border-[#00a8cc]/50 focus:ring-2 focus:ring-[#00a8cc]/10 transition-all duration-150"
+          />
+        </div>
+
+        {/* Dark Mode Toggle */}
+        <button
+          type="button"
+          aria-label="Toggle dark mode"
+          onClick={toggleDarkMode}
+          className="p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
+        >
+          {darkMode ? <Sun className="w-4 md:w-5 h-4 md:h-5" /> : <Moon className="w-4 md:w-5 h-4 md:h-5" />}
+        </button>
+
+        {/* User Profile Avatar */}
+        <div className="w-7 md:w-9 h-7 md:h-9 rounded-full overflow-hidden border border-slate-200 cursor-pointer shadow-sm flex-shrink-0">
+          <img
+            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256"
+            alt="User profile"
+            className="w-full h-full object-cover"
+          />
+        </div>
+      </div>
+    </header>
+  );
+}

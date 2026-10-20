@@ -7,16 +7,43 @@ import { PatientLayout } from './layouts/PatientLayout';
 import { DoctorLayout } from './layouts/DoctorLayout';
 import { AdminLayout } from './layouts/AdminLayout';
 
+// Import Dark Mode Provider
+import { DarkModeProvider } from './context/DarkModeContext';
+
+// Import Route Guard
+import ProtectedRoute from './components/ProtectedRoute';
+
+// Import AI Chat Assistant (floating widget shown across patient-facing pages)
+import ChatWidget from './components/ChatWidget';
+
 import PatientDashboard from './Patients/pages/patients-dashboard';
 import PatientsAppointments from './Patients/pages/patients-appoinments';
+import AppointmentConfirmationPage from './Patients/pages/AppointmentConfirmationPage';
+
+import PatientProfile from './Patients/pages/patientProfile';
+import ContactUs from './Patients/pages/ContactUs';
+import PatientsDoctors from './Patients/pages/patients-doctors';
 
 import AdminDashboard from './Admins/pages/adminDashboard';
-import QueueManagement from './Admins/pages/queueManagement';
-
+import QueueManagement from './Admins/pages/QueueManagement';
+import QRScanner from './Admins/pages/QRScanner';
+import PatientRecords from './Admins/pages/patientRecords';
+import ScheduleManagement from './Admins/pages/ScheduleManagement';
+import StaffManagement from './Admins/pages/staffManagement';
+import PaymentsManagement from './Admins/pages/PaymentsManagement';
+import DoctorManagement from './Admins/pages/DoctorManagement';
 
 import DoctorDashboard from './Doctors/pages/doctorsDashboard';
+import DoctorPatients from './Doctors/pages/doctorsPatients';
+import DoctorAppointments from './Doctors/pages/doctorsAppointments';
+import DoctorScheduleManager from './Doctors/pages/doctorsScheduleManager';
+import DoctorProfile from './Doctors/pages/doctorsProfile';
+import DoctorResetPassword from './Doctors/pages/doctorResetPassword';
 
 import HomePage from './PublicSite/pages/Home';
+import AboutPage from './PublicSite/pages/About';
+import SignupPage from './PublicSite/pages/Signup';
+import LoginPage from './PublicSite/pages/Login';
 
 function NotFound() {
   return <div className="p-8 text-center text-2xl font-bold">404 - Page Not Found</div>;
@@ -25,35 +52,70 @@ function NotFound() {
 export default function App() {
   return (
     <Router>
-      <Routes>
+      <DarkModeProvider>
+        <Routes>
 
         {/* 1. PUBLIC ROUTES (Main Navbar) */}
         <Route path="/" element={<PublicLayout />}>
-        <Route index element={<HomePage />} />
+          <Route index element={<HomePage />} />
+          <Route path="about" element={<AboutPage />} />
+          <Route path="contact" element={<ContactUs />} />
+        </Route>
+
+        {/* Standalone login page (no navbar) */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+
+
+
+        
           
+
+        {/* 2. PATIENT ROUTES (Patient Sidebar) - Protected */}
+        <Route element={<ProtectedRoute allowedRoles={['PATIENT']} />}>
+          <Route path="/patient" element={<PatientLayout />}>
+            <Route index element={<PatientDashboard />} />
+            <Route path="appointments" element={<PatientsAppointments />} />
+            <Route path="appointments/:appointmentId" element={<AppointmentConfirmationPage />} />
+            <Route path="doctors" element={<PatientsDoctors />} />
+            <Route path="profile" element={<PatientProfile />} />
+          </Route>
         </Route>
 
-        {/* 2. PATIENT ROUTES (Patient Sidebar) */}
-        <Route path="/patient" element={<PatientLayout />}>
-          <Route index element={<PatientDashboard />} />
-          <Route path="appointments" element={<PatientsAppointments />} />
+        {/* 3. DOCTOR ROUTES (Doctor Sidebar) - Protected */}
+        <Route element={<ProtectedRoute allowedRoles={['DOCTOR']} />}>
+          <Route path="/doctor" element={<DoctorLayout />}>
+            <Route index element={<DoctorDashboard />} />
+            <Route path="patients" element={<DoctorPatients />} />
+            <Route path="appointments" element={<DoctorAppointments />} />
+            <Route path="schedule-manager" element={<DoctorScheduleManager />} />
+            <Route path="profile" element={<DoctorProfile />} />
+            <Route path="reset-password" element={<DoctorResetPassword />} />
+          </Route>
         </Route>
 
-        {/* 3. DOCTOR ROUTES (Doctor Sidebar) */}
-        <Route path="/doctor" element={<DoctorLayout />}>
-          <Route index element={<DoctorDashboard />} />
-        </Route>
-
-        {/* 4. ADMIN ROUTES (Admin Sidebar) */}
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="queue-management" element={<QueueManagement />} />
+        {/* 4. ADMIN ROUTES (Admin Sidebar) - Protected */}
+        <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="queue-management" element={<QueueManagement />} />
+            <Route path="scan-qr" element={<QRScanner />} />
+            <Route path="patient-records" element={<PatientRecords />} />
+            <Route path="schedule-delays" element={<ScheduleManagement />} />
+            <Route path="staff-management" element={<StaffManagement />} />
+            <Route path="payments" element={<PaymentsManagement />} />
+            <Route path="doctor-management" element={<DoctorManagement />} />
+          </Route>
         </Route>
 
         {/* Catch-all route for unknown URLs */}
         <Route path="*" element={<NotFound />} />
 
       </Routes>
+
+      {/* Floating AI chat assistant — available across patient-facing pages */}
+      <ChatWidget />
+      </DarkModeProvider>
     </Router>
   );
 }
