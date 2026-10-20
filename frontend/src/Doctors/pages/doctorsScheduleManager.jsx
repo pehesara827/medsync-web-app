@@ -71,8 +71,8 @@ export default function DoctorScheduleManager() {
     setSessionError('');
     try {
       const doctorId = await getDoctorId();
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-      const response = await fetch(`${backendUrl}/api/doctor/session/current/${doctorId}`);
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${backendUrl}/doctor/session/current/${doctorId}`);
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -102,8 +102,8 @@ export default function DoctorScheduleManager() {
     setSessionError('');
     try {
       const doctorId = await getDoctorId();
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-      const response = await fetch(`${backendUrl}/api/doctor/session/delay/${doctorId}`, {
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${backendUrl}/doctor/session/delay/${doctorId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ minutes: parseInt(selected, 10) }),
@@ -149,8 +149,8 @@ export default function DoctorScheduleManager() {
         return;
       }
 
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-      const response = await fetch(`${backendUrl}/api/doctor/schedule/${profile.id}`);
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${backendUrl}/doctor/schedule/${profile.id}`);
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -179,8 +179,8 @@ export default function DoctorScheduleManager() {
     setError('');
     setSuccess('');
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-      const response = await fetch(`${backendUrl}/api/doctor/schedules/${scheduleId}`, {
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${backendUrl}/doctor/schedules/${scheduleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ max_patients: newMax }),

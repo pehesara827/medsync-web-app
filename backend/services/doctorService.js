@@ -1,5 +1,6 @@
 import * as authUserModel from '../models/authUserModel.js';
 import * as doctorProfileModel from '../models/doctorProfileModel.js';
+import { supabase } from '../supabase.js';
 
 /**
  * Register a new doctor user.
@@ -52,22 +53,97 @@ export const registerDoctor = async (registrationData, { isApproved = false } = 
     throw error;
   }
 
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const error = new Error('Please enter a valid email address.');
+    error.status = 400;
+    throw error;
+  }
+
+  // Validate specialty_id early: must be a UUID and must exist, otherwise
+  // the insert fails with a raw 23503 FK 500.
+  let normalizedSpecialtyId = null;
+  if (specialty_id !== undefined && specialty_id !== null && String(specialty_id).trim() !== '') {
+    const trimmed = String(specialty_id).trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+      const error = new Error('Selected specialty is invalid. Please choose a specialty from the list.');
+      error.status = 400;
+      throw error;
+    }
+    const { data: specialtyRow, error: specialtyError } = await supabase
+      .from('specialties')
+      .select('id')
+      .eq('id', trimmed)
+      .maybeSingle();
+    if (specialtyError) throw specialtyError;
+    if (!specialtyRow) {
+      const error = new Error('Selected specialty does not exist. Please choose a specialty from the list.');
+      error.status = 400;
+      throw error;
+    }
+    normalizedSpecialtyId = trimmed;
+  }
+
+  // Pre-check duplicate medical license so we return 409, not a raw 500.
+  if (medical_license_no && String(medical_license_no).trim() !== '') {
+    const { data: existing, error: dupError } = await supabase
+      .from('doctor_profiles')
+      .select('id')
+      .eq('medical_license_no', String(medical_license_no).trim())
+      .maybeSingle();
+    if (dupError) throw dupError;
+    if (existing) {
+      const error = new Error('Medical license number already exists. Please use a different value.');
+      error.status = 409;
+      error.code = '23505';
+      error.details = 'Key (medical_license_no) already exists.';
+      throw error;
+    }
+  }
+
   // 1. Create the account in auth.users (email + password live here).
   //    The DB trigger `handle_new_user_registration` will automatically
   //    insert the matching row into public.users using the user metadata.
-  const authUser = await authUserModel.createAuthUser({
-    email,
-    password: plainPassword,
-    userMetadata: {
-      username,
-      role: 'DOCTOR',
-      first_name,
-      last_name,
-      terms_accepted,
-    },
-  });
+  let authUser;
+  try {
+    authUser = await authUserModel.createAuthUser({
+      email,
+      password: plainPassword,
+      userMetadata: {
+        username,
+        role: 'DOCTOR',
+        first_name,
+        last_name,
+        terms_accepted,
+      },
+    });
+  } catch (authError) {
+    // Map Supabase Auth errors to friendly HTTP statuses instead of 500.
+    const msg = (authError.message || '').toLowerCase();
+    if (authError.name === 'AuthApiError' || authError.__isAuthError) {
+      if (msg.includes('already been registered') || msg.includes('already exists') || msg.includes('duplicate')) {
+        authError.status = 409;
+        authError.message = 'A user with this email address has already been registered.';
+      } else if (msg.includes('password')) {
+        authError.status = 400;
+      } else if (authError.status == null) {
+        authError.status = 400;
+      }
+    } else if (/fetch failed|network|socket|hang up|timed out|timeout|econn|enotfound/i.test(authError.message || '')) {
+      const err = new Error('Cannot reach the account service. Check your internet connection and try again.');
+      err.status = 503;
+      err.cause = authError;
+      throw err;
+    }
+    throw authError;
+  }
 
-  const userId = authUser.id;
+  const userId = authUser?.id;
+
+  if (!userId) {
+    const error = new Error('User account could not be created. Please try again later.');
+    error.status = 500;
+    throw error;
+  }
 
   // 2. Insert into doctor_profiles table
   try {
@@ -77,7 +153,7 @@ export const registerDoctor = async (registrationData, { isApproved = false } = 
       last_name,
       medical_license_no,
       specialization,
-      specialty_id,
+      specialty_id: normalizedSpecialtyId,
       experience_years,
       is_approved: isApproved,
       doctor_image,

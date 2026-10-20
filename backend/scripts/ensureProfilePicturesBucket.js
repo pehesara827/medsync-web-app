@@ -20,12 +20,12 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 const BUCKET = 'profile-pictures';
-const MAX_BYTES = 2 * 1024 * 1024; // 2 MB — matches the profile page validation
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB — matches the profile page validation
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 /**
  * Ensures the "profile-pictures" bucket exists and (with --apply) normalises its
- * limits to what the patient profile page accepts: 2 MB, PNG/JPEG/WEBP.
+ * limits to what the patient profile page accepts: 5 MB, PNG/JPEG/WEBP.
  *
  * Policy note: the replaced picture is deleted by the backend with the service
  * role (see controllers/user_profile_controller.js), so this script

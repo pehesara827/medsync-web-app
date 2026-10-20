@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../supabaseClient';
+import { MAX_IMAGE_BYTES, MAX_IMAGE_LABEL, ALLOWED_AVATAR_TYPES, ALLOWED_AVATAR_LABEL } from '../../utils/uploadLimits';
 import Step1PersonalInfo from './Step1PersonalInfo';
 import Step2EmergencyContact from './Step2EmergencyContact';
 import Step3Credentials from './Step3Credentials';
@@ -43,7 +44,22 @@ export default function PatientRegistration() {
 
   const handleChange = (event) => {
     const { name, type, value, checked, files } = event.target;
-    const fieldValue = type === 'checkbox' ? checked : type === 'file' ? files?.[0] || '' : value;
+    let fieldValue = type === 'checkbox' ? checked : type === 'file' ? files?.[0] || '' : value;
+
+    // Profile picture: enforce image type + 5 MB max at pick time.
+    if (type === 'file' && name === 'profile_picture' && fieldValue) {
+      const picked = fieldValue;
+      if (picked?.type && !ALLOWED_AVATAR_TYPES.includes(picked.type)) {
+        setSubmitError(`Please choose a ${ALLOWED_AVATAR_LABEL} image.`);
+        event.target.value = '';
+        return;
+      }
+      if (picked?.size && picked.size > MAX_IMAGE_BYTES) {
+        setSubmitError(`Profile pictures must be ${MAX_IMAGE_LABEL} or smaller.`);
+        event.target.value = '';
+        return;
+      }
+    }
 
     setFormData((prev) => ({
       ...prev,
@@ -89,6 +105,15 @@ export default function PatientRegistration() {
    */
   const uploadProfilePicture = async (file) => {
     if (!file) return null;
+
+    // Defence-in-depth: re-check type + 5 MB right before the storage call,
+    // in case the file bypassed the picker validation.
+    if (file.type && !ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      throw new Error(`Please choose a ${ALLOWED_AVATAR_LABEL} image.`);
+    }
+    if (file.size && file.size > MAX_IMAGE_BYTES) {
+      throw new Error(`Profile pictures must be ${MAX_IMAGE_LABEL} or smaller.`);
+    }
 
     const filePath = `avatars/${Date.now()}_${file.name}`;
 

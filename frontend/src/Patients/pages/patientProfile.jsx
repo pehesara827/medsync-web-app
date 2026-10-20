@@ -22,11 +22,9 @@ import {
   Send,
   X
 } from 'lucide-react';
+import { AVATAR_BUCKET, MAX_IMAGE_BYTES, MAX_IMAGE_LABEL, ALLOWED_AVATAR_TYPES } from '../../utils/uploadLimits';
 
-// ── Profile picture upload ──────────────────────────────────────────────
-const AVATAR_BUCKET = 'profile-pictures';
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
-const ALLOWED_AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+// ── Profile picture upload (5 MB max — see utils/uploadLimits) ────────────────
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 /** Builds up to two uppercase initials from a person's full name. */
@@ -155,8 +153,8 @@ export default function PatientProfile() {
       alert('Please choose a PNG, JPG or WEBP image.');
       return;
     }
-    if (file.size > MAX_AVATAR_BYTES) {
-      alert('Profile pictures must be 2 MB or smaller.');
+    if (file.size > MAX_IMAGE_BYTES) {
+      alert(`Profile pictures must be ${MAX_IMAGE_LABEL} or smaller.`);
       return;
     }
 
@@ -376,7 +374,7 @@ export default function PatientProfile() {
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Profile Header */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 dark:border-slate-700 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex flex-col sm:flex-row items-center gap-5">
             <div className="relative group">
               <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-[#4CD7F6] shadow-md">
@@ -424,15 +422,15 @@ export default function PatientProfile() {
 
             <div className="text-center sm:text-left space-y-1">
               <div className="flex items-center justify-center sm:justify-start gap-2">
-                <h1 className="text-2xl font-bold text-[#252B2D]">{profile.fullName}</h1>
+                <h1 className="text-2xl font-bold text-[#252B2D] dark:text-slate-100">{profile.fullName}</h1>
                 {profile.isVerified && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#4CD7F6]/10 text-[#252B2D] border border-[#4CD7F6]/30">
-                    <ShieldCheck size={12} className="text-[#4CD7F6]" /> VERIFIED
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#4CD7F6]/10 dark:bg-cyan-500/10 text-[#252B2D] dark:text-cyan-300 border border-[#4CD7F6]/30 dark:border-cyan-500/30">
+                    <ShieldCheck size={12} className="text-[#4CD7F6] dark:text-cyan-400" /> VERIFIED
                   </span>
                 )}
               </div>
-              <p className="text-sm font-medium text-[#3D494C]">
-                Patient ID: <span className="font-semibold text-[#252B2D]">{profile.patientId}</span>
+              <p className="text-sm font-medium text-[#3D494C] dark:text-slate-400">
+                Patient ID: <span className="font-semibold text-[#252B2D] dark:text-slate-200">{profile.patientId}</span>
               </p>
             </div>
           </div>
@@ -459,44 +457,44 @@ export default function PatientProfile() {
         {/* Form Body */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-6">
-            <div className="flex items-center gap-2 pb-4 border-b border-[#BCC9CD]/40">
-              <User className="text-[#4CD7F6]" size={20} />
-              <h2 className="text-lg font-bold text-[#252B2D]">Personal Information</h2>
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 dark:border-slate-700 space-y-6">
+            <div className="flex items-center gap-2 pb-4 border-b border-[#BCC9CD]/40 dark:border-slate-700">
+              <User className="text-[#4CD7F6] dark:text-cyan-400" size={20} />
+              <h2 className="text-lg font-bold text-[#252B2D] dark:text-slate-100">Personal Information</h2>
             </div>
 
             <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-[#3D494C] uppercase tracking-wider mb-2">Full Name</label>
+                  <label className="block text-xs font-semibold text-[#3D494C] dark:text-slate-400 uppercase tracking-wider mb-2">Full Name</label>
                   <input 
                     type="text" 
                     name="fullName"
                     disabled={!isEditing}
                     value={profile.fullName} 
                     onChange={handleInputChange}
-                    className={`w-full px-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
+                    className={`w-full px-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white dark:bg-slate-800 border-[#4CD7F6] dark:border-cyan-500' : 'bg-slate-50 dark:bg-slate-800 border-[#BCC9CD] dark:border-slate-700'} text-[#252B2D] dark:text-slate-100 text-sm focus:outline-none transition`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#3D494C] uppercase tracking-wider mb-2">Date of Birth</label>
+                  <label className="block text-xs font-semibold text-[#3D494C] dark:text-slate-400 uppercase tracking-wider mb-2">Date of Birth</label>
                   <input 
                     type="date" 
                     name="dob"
                     disabled={!isEditing}
                     value={profile.dob} 
                     onChange={handleInputChange}
-                    className={`w-full px-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
+                    className={`w-full px-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white dark:bg-slate-800 border-[#4CD7F6] dark:border-cyan-500' : 'bg-slate-50 dark:bg-slate-800 border-[#BCC9CD] dark:border-slate-700'} text-[#252B2D] dark:text-slate-100 text-sm focus:outline-none transition [color-scheme:light] dark:[color-scheme:dark]`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#3D494C] uppercase tracking-wider mb-2">Gender</label>
+                  <label className="block text-xs font-semibold text-[#3D494C] dark:text-slate-400 uppercase tracking-wider mb-2">Gender</label>
                   <select 
                     name="gender"
                     disabled={!isEditing}
                     value={profile.gender}
                     onChange={handleInputChange}
-                    className={`w-full px-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
+                    className={`w-full px-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white dark:bg-slate-800 border-[#4CD7F6] dark:border-cyan-500' : 'bg-slate-50 dark:bg-slate-800 border-[#BCC9CD] dark:border-slate-700'} text-[#252B2D] dark:text-slate-100 text-sm focus:outline-none transition`}
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -504,59 +502,59 @@ export default function PatientProfile() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#3D494C] uppercase tracking-wider mb-2">Blood Type</label>
-                  <div className="px-4 py-2.5 rounded-xl border border-[#4CD7F6]/30 bg-[#4CD7F6]/10 text-[#252B2D] font-bold text-sm text-center sm:text-left">
+                  <label className="block text-xs font-semibold text-[#3D494C] dark:text-slate-400 uppercase tracking-wider mb-2">Blood Type</label>
+                  <div className="px-4 py-2.5 rounded-xl border border-[#4CD7F6]/30 dark:border-cyan-500/30 bg-[#4CD7F6]/10 dark:bg-cyan-500/10 text-[#252B2D] dark:text-cyan-200 font-bold text-sm text-center sm:text-left">
                     {profile.bloodType}
                   </div>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-[#BCC9CD]/40 space-y-4">
-                <h3 className="text-xs font-bold text-[#3D494C] uppercase tracking-wider">Contact Details</h3>
+              <div className="pt-4 border-t border-[#BCC9CD]/40 dark:border-slate-700 space-y-4">
+                <h3 className="text-xs font-bold text-[#3D494C] dark:text-slate-400 uppercase tracking-wider">Contact Details</h3>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#3D494C] mb-1">Email Address</label>
+                    <label className="block text-xs font-medium text-[#3D494C] dark:text-slate-400 mb-1">Email Address</label>
                     <div className="relative flex items-center">
-                      <Mail size={16} className="absolute left-3.5 text-[#3D494C]" />
+                      <Mail size={16} className="absolute left-3.5 text-[#3D494C] dark:text-slate-500" />
                       <input 
                         type="email" 
                         name="email"
                         disabled={!isEditing}
                         value={profile.email} 
                         onChange={handleInputChange}
-                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white dark:bg-slate-800 border-[#4CD7F6] dark:border-cyan-500' : 'bg-slate-50 dark:bg-slate-800 border-[#BCC9CD] dark:border-slate-700'} text-[#252B2D] dark:text-slate-100 text-sm focus:outline-none transition`}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-[#3D494C] mb-1">Phone Number</label>
+                    <label className="block text-xs font-medium text-[#3D494C] dark:text-slate-400 mb-1">Phone Number</label>
                     <div className="relative flex items-center">
-                      <Phone size={16} className="absolute left-3.5 text-[#3D494C]" />
+                      <Phone size={16} className="absolute left-3.5 text-[#3D494C] dark:text-slate-500" />
                       <input 
                         type="text" 
                         name="phone"
                         disabled={!isEditing}
                         value={profile.phone} 
                         onChange={handleInputChange}
-                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white dark:bg-slate-800 border-[#4CD7F6] dark:border-cyan-500' : 'bg-slate-50 dark:bg-slate-800 border-[#BCC9CD] dark:border-slate-700'} text-[#252B2D] dark:text-slate-100 text-sm focus:outline-none transition`}
                       />
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-[#3D494C] mb-1">Residential Address</label>
+                  <label className="block text-xs font-medium text-[#3D494C] dark:text-slate-400 mb-1">Residential Address</label>
                   <div className="relative flex items-center">
-                    <MapPin size={16} className="absolute left-3.5 text-[#3D494C]" />
+                    <MapPin size={16} className="absolute left-3.5 text-[#3D494C] dark:text-slate-500" />
                     <input 
                       type="text" 
                       name="address"
                       disabled={!isEditing}
                       value={profile.address} 
                       onChange={handleInputChange}
-                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white border-[#4CD7F6]' : 'bg-slate-50 border-[#BCC9CD]'} text-[#252B2D] text-sm focus:outline-none transition`}
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isEditing ? 'bg-white dark:bg-slate-800 border-[#4CD7F6] dark:border-cyan-500' : 'bg-slate-50 dark:bg-slate-800 border-[#BCC9CD] dark:border-slate-700'} text-[#252B2D] dark:text-slate-100 text-sm focus:outline-none transition`}
                     />
                   </div>
                 </div>
@@ -569,25 +567,25 @@ export default function PatientProfile() {
             
             
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-5 dark:bg-slate-900 dark:border-slate-700">
-              <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40">
-                <Users className="text-[#4CD7F6]" size={20} />
-                <h2 className="text-lg font-bold text-[#252B2D]">Beneficiaries</h2>
+              <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40 dark:border-slate-700">
+                <Users className="text-[#4CD7F6] dark:text-cyan-400" size={20} />
+                <h2 className="text-lg font-bold text-[#252B2D] dark:text-slate-100">Beneficiaries</h2>
               </div>
 
               {(profile.beneficiaries || []).length === 0 ? (
-                <p className="text-sm text-[#3D494C]">
+                <p className="text-sm text-[#3D494C] dark:text-slate-400">
                   No family members added yet. Family members added while booking an appointment will appear here.
                 </p>
               ) : (
                 <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                   {(profile.beneficiaries || []).map((beneficiary) => (
-                    <div key={beneficiary.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-[#BCC9CD]/50">
-                      <div className="w-9 h-9 rounded-full bg-[#4CD7F6]/10 text-[#252B2D] flex items-center justify-center font-bold text-xs border border-[#4CD7F6]/30">
+                    <div key={beneficiary.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-[#BCC9CD]/50 dark:border-slate-700">
+                      <div className="w-9 h-9 rounded-full bg-[#4CD7F6]/10 dark:bg-cyan-500/10 text-[#252B2D] dark:text-cyan-200 flex items-center justify-center font-bold text-xs border border-[#4CD7F6]/30 dark:border-cyan-500/30">
                         {initialsOf(beneficiary.fullName)}
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-[#252B2D]">{beneficiary.fullName}</h4>
-                        <p className="text-xs text-[#3D494C]">
+                        <h4 className="text-sm font-semibold text-[#252B2D] dark:text-slate-100">{beneficiary.fullName}</h4>
+                        <p className="text-xs text-[#3D494C] dark:text-slate-400">
                           {[beneficiary.relationship, beneficiary.age ? `${beneficiary.age} yrs` : null, beneficiary.gender]
                             .filter(Boolean)
                             .join(' • ')}
@@ -601,24 +599,24 @@ export default function PatientProfile() {
 
             
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-4 dark:bg-slate-900 dark:border-slate-700">
-              <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40">
-                <Phone className="text-[#4CD7F6]" size={20} />
-                <h2 className="text-lg font-bold text-[#252B2D]">Emergency Contacts</h2>
+              <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40 dark:border-slate-700">
+                <Phone className="text-[#4CD7F6] dark:text-cyan-400" size={20} />
+                <h2 className="text-lg font-bold text-[#252B2D] dark:text-slate-100">Emergency Contacts</h2>
               </div>
 
               <div className="space-y-3">
                 {profile.emergencyContacts.map((contact) => (
-                  <div key={contact.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-[#BCC9CD]/50">
+                  <div key={contact.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-[#BCC9CD]/50 dark:border-slate-700">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-[#4CD7F6]/10 text-[#252B2D] flex items-center justify-center font-bold text-xs border border-[#4CD7F6]/30">
+                      <div className="w-9 h-9 rounded-full bg-[#4CD7F6]/10 dark:bg-cyan-500/10 text-[#252B2D] dark:text-cyan-200 flex items-center justify-center font-bold text-xs border border-[#4CD7F6]/30 dark:border-cyan-500/30">
                         {contact.initials}
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-[#252B2D]">{contact.name}</h4>
-                        <p className="text-xs text-[#3D494C]">{contact.relation}</p>
+                        <h4 className="text-sm font-semibold text-[#252B2D] dark:text-slate-100">{contact.name}</h4>
+                        <p className="text-xs text-[#3D494C] dark:text-slate-400">{contact.relation}</p>
                       </div>
                     </div>
-                    <a href={`tel:${contact.phone}`} className="p-2 rounded-lg text-[#3D494C] hover:text-[#252B2D] hover:bg-[#4CD7F6]/20 transition">
+                    <a href={`tel:${contact.phone}`} className="p-2 rounded-lg text-[#3D494C] dark:text-slate-400 hover:text-[#252B2D] dark:hover:text-slate-100 hover:bg-[#4CD7F6]/20 dark:hover:bg-cyan-500/10 transition">
                       <Phone size={16} />
                     </a>
                   </div>
@@ -627,16 +625,16 @@ export default function PatientProfile() {
 
               <button 
                 onClick={() => setShowContactModal(true)}
-                className="w-full mt-2 py-2.5 border border-dashed border-[#BCC9CD] rounded-xl text-[#252B2D] hover:bg-[#4CD7F6]/10 hover:border-[#4CD7F6] text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                className="w-full mt-2 py-2.5 border border-dashed border-[#BCC9CD] dark:border-slate-600 rounded-xl text-[#252B2D] dark:text-slate-200 hover:bg-[#4CD7F6]/10 dark:hover:bg-cyan-500/10 hover:border-[#4CD7F6] dark:hover:border-cyan-500 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
               >
-                <Plus size={14} className="text-[#4CD7F6]" /> Add Contact
+                <Plus size={14} className="text-[#4CD7F6] dark:text-cyan-400" /> Add Contact
               </button>
             </div>
 
             {/* Security — reset / change password */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#BCC9CD]/60 space-y-4 dark:bg-slate-900 dark:border-slate-700">
-              <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40">
-                <ShieldCheck className="text-[#4CD7F6]" size={20} />
+              <div className="flex items-center gap-2 pb-3 border-b border-[#BCC9CD]/40 dark:border-slate-700">
+                <ShieldCheck className="text-[#4CD7F6] dark:text-cyan-400" size={20} />
                 <h2 className="text-lg font-bold text-[#252B2D] dark:text-slate-100">Security</h2>
               </div>
 
@@ -668,45 +666,45 @@ export default function PatientProfile() {
       
         {showContactModal && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 border border-[#BCC9CD]">
-              <div className="flex justify-between items-center pb-2 border-b">
-                <h3 className="font-bold text-lg">Add Emergency Contact</h3>
-                <button onClick={() => setShowContactModal(false)}><X size={20} /></button>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full space-y-4 border border-[#BCC9CD] dark:border-slate-700">
+              <div className="flex justify-between items-center pb-2 border-b border-[#BCC9CD]/40 dark:border-slate-700">
+                <h3 className="font-bold text-lg text-[#252B2D] dark:text-slate-100">Add Emergency Contact</h3>
+                <button onClick={() => setShowContactModal(false)} className="text-[#252B2D] dark:text-slate-300"><X size={20} /></button>
               </div>
               <form onSubmit={handleAddContactSubmit} className="space-y-3">
                 <div>
-                  <label className="text-xs font-semibold text-[#3D494C]">Full Name</label>
+                  <label className="text-xs font-semibold text-[#3D494C] dark:text-slate-400">Full Name</label>
                   <input 
                     type="text" 
                     required 
                     value={newContact.name} 
                     onChange={(e) => setNewContact({...newContact, name: e.target.value})}
-                    className="w-full px-3 py-2 rounded-lg border border-[#BCC9CD] text-sm mt-1" 
+                    className="w-full px-3 py-2 rounded-lg border border-[#BCC9CD] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 text-sm mt-1" 
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-[#3D494C]">Relationship</label>
+                  <label className="text-xs font-semibold text-[#3D494C] dark:text-slate-400">Relationship</label>
                   <input 
                     type="text" 
                     required 
                     placeholder="e.g. Spouse, Brother"
                     value={newContact.relation} 
                     onChange={(e) => setNewContact({...newContact, relation: e.target.value})}
-                    className="w-full px-3 py-2 rounded-lg border border-[#BCC9CD] text-sm mt-1" 
+                    className="w-full px-3 py-2 rounded-lg border border-[#BCC9CD] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 text-sm mt-1" 
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-[#3D494C]">Phone Number</label>
+                  <label className="text-xs font-semibold text-[#3D494C] dark:text-slate-400">Phone Number</label>
                   <input 
                     type="text" 
                     required 
                     value={newContact.phone} 
                     onChange={(e) => setNewContact({...newContact, phone: e.target.value})}
-                    className="w-full px-3 py-2 rounded-lg border border-[#BCC9CD] text-sm mt-1" 
+                    className="w-full px-3 py-2 rounded-lg border border-[#BCC9CD] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 text-sm mt-1" 
                   />
                 </div>
                 <div className="pt-2 flex justify-end gap-2">
-                  <button type="button" onClick={() => setShowContactModal(false)} className="px-4 py-2 rounded-lg border text-sm font-medium">Cancel</button>
+                  <button type="button" onClick={() => setShowContactModal(false)} className="px-4 py-2 rounded-lg border border-[#BCC9CD] dark:border-slate-600 dark:text-slate-200 text-sm font-medium">Cancel</button>
                   <button type="submit" className="px-4 py-2 rounded-lg bg-[#4CD7F6] text-[#252B2D] font-bold text-sm">Save Contact</button>
                 </div>
               </form>

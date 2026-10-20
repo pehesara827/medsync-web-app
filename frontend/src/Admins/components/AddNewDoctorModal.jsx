@@ -169,7 +169,14 @@ const handleSpecialtyChange = (e) => {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(data.message || 'Failed to add doctor.');
+        if (res.status === 503) {
+          setError(
+            data.message ||
+              'Cannot reach the account service right now. Check your internet connection, then restart the backend server and try again.'
+          );
+        } else {
+          setError(data.message || 'Failed to add doctor.');
+        }
         return;
       }
 

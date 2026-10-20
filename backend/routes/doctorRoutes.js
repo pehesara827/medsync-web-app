@@ -3,6 +3,8 @@ import {
   getDoctors,
   getDoctorProfile,
   updateDoctorProfile,
+  updateDoctorPhoto,
+  updateDoctorCredentials,
   getDoctorAppointments,
   getRecentConsultations,
   getDoctorSchedule,
@@ -23,6 +25,12 @@ router.get('/profile/:userId', getDoctorProfile);
 
 // Update doctor profile by user_id (logged-in doctor)
 router.put('/profile/:userId', updateDoctorProfile);
+
+// Update doctor profile picture by user_id (Supabase storage URL)
+router.put('/profile/:userId/photo', updateDoctorPhoto);
+
+// Update doctor login username by user_id
+router.put('/profile/:userId/credentials', updateDoctorCredentials);
 
 // Get doctor's appointments by doctor_id (supports ?date=YYYY-MM-DD)
 router.get('/appointments/:doctorId', getDoctorAppointments);

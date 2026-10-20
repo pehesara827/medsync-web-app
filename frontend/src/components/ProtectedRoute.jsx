@@ -7,7 +7,8 @@ import LoadingSpinner from './LoadingSpinner';
  * ProtectedRoute
  *
  * Guards a route by:
- *  1. Checking for an active Supabase session (persisted across reloads).
+ *  1. Checking for an active Supabase session (tab-session only: kept in
+ *     sessionStorage, so a new tab/browser restart requires a fresh login).
  *  2. Resolving the user's role from `public.users` (falling back to
  *     `user_metadata.role` if the row isn't found yet).
  *  3. Allowing access only if the role is in `allowedRoles`.
@@ -27,7 +28,7 @@ export default function ProtectedRoute({ allowedRoles = [] }) {
 
     const resolveSession = async () => {
       try {
-        // 1. Get the current session (persisted in localStorage by Supabase)
+        // 1. Get the current tab session (Supabase persists it in sessionStorage)
         const { data: sessionData } = await supabase.auth.getSession();
         const currentSession = sessionData?.session ?? null;
 

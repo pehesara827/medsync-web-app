@@ -21,7 +21,6 @@ const PAGE_TITLES = {
   '/analytics': 'Analytics',
   '/payments': 'Payments',
   '/settings': 'Settings',
-  '/help': 'Help Center',
 };
 
 export default function Header({ onMenuClick }) {

@@ -183,6 +183,10 @@ export const getDoctorProfile = async (req, res, next) => {
       return res.status(400).json({ message: 'User ID is required.' });
     }
 
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      return res.status(400).json({ message: 'User ID must be a valid UUID.' });
+    }
+
     const { data: profile, error } = await supabase
       .from('doctor_profiles')
       .select(
@@ -1352,6 +1356,155 @@ export const updateAdminDoctorInfo = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Error in updateAdminDoctorInfo:', error);
+    next(error);
+  }
+};
+
+// ── Doctor profile picture (Supabase `profile-pictures` bucket) ────────────
+const DOCTOR_AVATAR_BUCKET = 'profile-pictures';
+
+/**
+ * Extracts the storage object path from a public bucket URL so the replaced
+ * file can be deleted. Returns null for external URLs (e.g. Unsplash).
+ */
+const doctorStoragePathFromPublicUrl = (url) => {
+  if (typeof url !== 'string' || !url) return null;
+  const marker = `/storage/v1/object/public/${DOCTOR_AVATAR_BUCKET}/`;
+  const markerIndex = url.indexOf(marker);
+  if (markerIndex === -1) return null;
+  const encodedPath = url.slice(markerIndex + marker.length).split('?')[0];
+  try {
+    return decodeURIComponent(encodedPath);
+  } catch {
+    return encodedPath;
+  }
+};
+
+const removeDoctorAvatarObject = async (url) => {
+  const objectPath = doctorStoragePathFromPublicUrl(url);
+  if (!objectPath) return false;
+  const { error } = await supabase.storage.from(DOCTOR_AVATAR_BUCKET).remove([objectPath]);
+  if (error) {
+    console.error('Failed to delete previous doctor picture:', error);
+    return false;
+  }
+  return true;
+};
+
+/**
+ * PUT /api/doctor/profile/:userId/photo
+ * Stores a newly uploaded doctor picture and deletes the file it replaces.
+ * Body: { profilePictureUrl: string }
+ */
+export const updateDoctorPhoto = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { profilePictureUrl } = req.body || {};
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required.' });
+    }
+    if (typeof profilePictureUrl !== 'string' || !profilePictureUrl.trim()) {
+      return res.status(400).json({ message: 'A profile picture URL is required.' });
+    }
+    const newUrl = profilePictureUrl.trim();
+
+    const { data: existing, error: fetchError } = await supabase
+      .from('doctor_profiles')
+      .select('id, doctor_image')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!existing) {
+      return res.status(404).json({ message: 'Doctor profile not found.' });
+    }
+
+    const previousUrl = existing.doctor_image || null;
+
+    const { error: updateError } = await supabase
+      .from('doctor_profiles')
+      .update({ doctor_image: newUrl })
+      .eq('id', existing.id);
+
+    if (updateError) throw updateError;
+
+    let removedPrevious = false;
+    if (previousUrl && previousUrl !== newUrl) {
+      removedPrevious = await removeDoctorAvatarObject(previousUrl);
+    }
+
+    res.json({
+      message: 'Profile picture updated successfully!',
+      doctor: { doctorImage: newUrl },
+      removedPrevious,
+    });
+  } catch (error) {
+    console.error('Error in updateDoctorPhoto:', error);
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/doctor/profile/:userId/credentials
+ * Lets a doctor change their login username after the admin creates the
+ * account. Keeps `public.users.username` + `auth.users` metadata in sync so
+ * `get_email_by_identifier` login keeps working.
+ * Body: { username: string }
+ */
+export const updateDoctorCredentials = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { username } = req.body || {};
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required.' });
+    }
+    const trimmed = String(username || '').trim();
+    if (!trimmed) {
+      return res.status(400).json({ message: 'Username is required.', field: 'username' });
+    }
+    if (!/^[a-zA-Z0-9._]{3,30}$/.test(trimmed)) {
+      return res.status(400).json({
+        message: 'Username must be 3–30 characters (letters, numbers, dot or underscore).',
+        field: 'username',
+      });
+    }
+
+    // Reject duplicates (case-insensitive) owned by another user.
+    const { data: clash, error: clashError } = await supabase
+      .from('users')
+      .select('id, username')
+      .ilike('username', trimmed)
+      .neq('id', userId)
+      .maybeSingle();
+    if (clashError) throw clashError;
+    if (clash) {
+      return res.status(409).json({ message: 'Username already exists. Please use a different value.', field: 'username' });
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from('users')
+      .update({ username: trimmed })
+      .eq('id', userId)
+      .select('id, username, email, role')
+      .maybeSingle();
+    if (updateError) throw updateError;
+    if (!updated) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // Keep auth.users metadata in sync (best-effort — never fail the rename).
+    try {
+      const { updateAuthUser } = await import('../models/authUserModel.js');
+      await updateAuthUser(userId, { username: trimmed });
+    } catch (metaError) {
+      console.error('[updateDoctorCredentials] auth metadata sync failed:', metaError.message);
+    }
+
+    res.json({ message: 'Username updated successfully.', user: updated });
+  } catch (error) {
+    console.error('Error in updateDoctorCredentials:', error);
     next(error);
   }
 };

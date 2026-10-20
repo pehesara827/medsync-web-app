@@ -38,6 +38,21 @@ export const deleteAuthUser = async (id) => {
 };
 
 /**
+ * Update a user's metadata / credentials inside `auth.users`.
+ * Used when a doctor changes their username (kept in sync with public.users).
+ */
+export const updateAuthUser = async (id, { username } = {}) => {
+  const updates = {};
+  if (username !== undefined) {
+    updates.user_metadata = { username };
+  }
+  if (Object.keys(updates).length === 0) return null;
+  const { data, error } = await supabase.auth.admin.updateUserById(id, updates);
+  if (error) throw error;
+  return data.user;
+};
+
+/**
  * Fetch a single auth user by its UUID.
  */
 export const findAuthUserById = async (id) => {

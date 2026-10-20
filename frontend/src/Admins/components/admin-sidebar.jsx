@@ -6,7 +6,6 @@ import {
   Users,
   CalendarClock,
   CreditCard,
-  HelpCircle,
   LogOut,
   ShieldCheck,
   Stethoscope,
@@ -166,10 +165,6 @@ export default function AdminSidebar({ isOpen, onClose }) {
         </nav>
 
         <div className="px-3 py-4 border-t border-slate-100 dark:border-slate-700 space-y-1">
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
-            <HelpCircle className="w-4 h-4" />
-            Help Center
-          </button>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"

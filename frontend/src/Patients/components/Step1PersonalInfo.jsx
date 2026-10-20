@@ -11,11 +11,12 @@ export default function Step1PersonalInfo({ formData, handleChange, nextStep }) 
             <input
               type="file"
               name="profile_picture"
-              accept="image/*"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
               className="hidden"
               onChange={handleChange}
             />
           </label>
+          <p className="text-xs text-slate-400">PNG, JPG or WEBP up to 5 MB</p>
         </div>
 
         <div className="mt-10 grid gap-4 sm:grid-cols-2">

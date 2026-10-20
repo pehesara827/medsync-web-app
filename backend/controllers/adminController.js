@@ -1,6 +1,7 @@
 import { supabase } from '../supabase.js';
 import * as doctorService from '../services/doctorService.js';
 import { sendReviewRequestNotification } from '../models/appointmentModel.js';
+import { createNotification } from '../models/notificationModel.js';
 
 /**
  * Formats a TIME column (HH:MM:SS) into a 12-hour label.
@@ -376,6 +377,25 @@ export const createAdminDoctor = async (req, res, next) => {
 
     const result = await doctorService.registerDoctor(payload, { isApproved: true });
 
+    // Tell the new doctor to reset their password / set their username.
+    // Best-effort: a notification failure must never fail the account creation.
+    try {
+      const newUserId = result?.user?.id;
+      if (newUserId) {
+        await createNotification({
+          user_id: newUserId,
+          type: 'GENERAL',
+          title: 'Welcome to MedSync — Please reset your password',
+          message:
+            'An admin created your doctor account. Please reset your password and set your username from the Reset Password page to secure your account.',
+          action_link: '/doctor/reset-password',
+          metadata: { doctor_id: result?.profile?.id || null, firstLogin: true },
+        });
+      }
+    } catch (notifError) {
+      console.error('[createAdminDoctor] Welcome notification failed:', notifError.message);
+    }
+
     res.status(201).json({
       message: 'Doctor added successfully.',
       user: result.user,
@@ -393,6 +413,20 @@ export const createAdminDoctor = async (req, res, next) => {
       return res.status(409).json({
         message: `${field} already exists. Please use a different value.`,
         field: field.toLowerCase().replace(/\s+/g, '_'),
+      });
+    }
+
+    // Backend could not reach Supabase (DNS / TLS / connection reset).
+    // Return 503 with an actionable message instead of an opaque 500.
+    if (
+      error.status === 503 ||
+      /fetch failed|network|socket|hang up|timed out|timeout|econn|enotfound|eai_again/i.test(
+        `${error.message || ''} ${error.cause?.message || ''}`
+      )
+    ) {
+      return res.status(503).json({
+        message:
+          'Cannot reach the account service right now. Check your internet connection and try again in a moment.',
       });
     }
 

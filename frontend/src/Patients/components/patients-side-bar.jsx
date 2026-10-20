@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { supabase } from '../../../supabaseClient';
 
 const NAV_ITEMS = [
   {
@@ -62,10 +63,13 @@ export default function Sidebar({ isOpen, onClose }) {
     return () => window.removeEventListener('resize', handleResize);
   }, [onClose]);
 
-  const handleLogout = () => {
-    alert('Logging out...');
-    navigate('/');
-    if (onClose) onClose();
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      navigate('/login');
+      if (onClose) onClose();
+    }
   };
 
   const closeSidebar = () => {
@@ -153,23 +157,6 @@ export default function Sidebar({ isOpen, onClose }) {
 
         {/* Bottom Section */}
         <div className="flex flex-col gap-1.5 pb-2">
-          <NavLink
-            to="/patient/help"
-            onClick={closeSidebar}
-            className={({ isActive }) =>
-              `group flex items-center gap-4 px-4 py-3 rounded-xl text-sm transition-colors duration-150 ${
-                isActive
-                  ? 'bg-[#e0f5f8] dark:bg-slate-700 text-[#00b0d8] dark:text-slate-100 font-semibold'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-700/70 font-medium'
-              }`
-            }
-          >
-            <svg className="w-5 h-5 flex-shrink-0 text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Help Center</span>
-          </NavLink>
-
           <button
             type="button"
             onClick={handleLogout}

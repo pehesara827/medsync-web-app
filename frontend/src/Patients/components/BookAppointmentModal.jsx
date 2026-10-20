@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, User, Calendar, CreditCard, ChevronDown, Loader2, AlertCircle, CheckCircle2, Upload, FileText, Building2, ArrowLeft, ArrowRight, Landmark, Lock, ShieldCheck, Copy, Check, Download, Camera, ExternalLink } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
+import { MAX_SLIP_BYTES, MAX_SLIP_LABEL, ALLOWED_SLIP_TYPES, ALLOWED_SLIP_LABEL } from '../../utils/uploadLimits';
 import AppointmentConfirmationPass from './AppointmentConfirmationPass';
 import WaitlistModal from './WaitlistModal';
 import PaymentGatewayModal from './PaymentGatewayModal';
@@ -315,16 +316,15 @@ export default function BookAppointmentModal({
   const addSlipFile = (file) => {
     if (!file) return;
 
-    // Validate file type (images and PDFs)
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!allowedTypes.includes(file.type)) {
-      setError('Please upload a valid slip file (JPG, PNG, WEBP, or PDF).');
+    // Validate file type (images and PDFs) — 5 MB max
+    if (!ALLOWED_SLIP_TYPES.includes(file.type)) {
+      setError(`Please upload a valid slip file (${ALLOWED_SLIP_LABEL}).`);
       return;
     }
 
     // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Slip file must be less than 5MB.');
+    if (file.size > MAX_SLIP_BYTES) {
+      setError(`Slip file must be ${MAX_SLIP_LABEL} or smaller.`);
       return;
     }
 

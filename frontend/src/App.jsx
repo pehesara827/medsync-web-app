@@ -38,6 +38,7 @@ import DoctorPatients from './Doctors/pages/doctorsPatients';
 import DoctorAppointments from './Doctors/pages/doctorsAppointments';
 import DoctorScheduleManager from './Doctors/pages/doctorsScheduleManager';
 import DoctorProfile from './Doctors/pages/doctorsProfile';
+import DoctorResetPassword from './Doctors/pages/doctorResetPassword';
 
 import HomePage from './PublicSite/pages/Home';
 import AboutPage from './PublicSite/pages/About';
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="appointments" element={<DoctorAppointments />} />
             <Route path="schedule-manager" element={<DoctorScheduleManager />} />
             <Route path="profile" element={<DoctorProfile />} />
+            <Route path="reset-password" element={<DoctorResetPassword />} />
           </Route>
         </Route>
 

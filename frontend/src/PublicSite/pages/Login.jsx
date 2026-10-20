@@ -35,6 +35,7 @@ export default function LoginPage() {
 
       if (!resolvedUser?.user_email) {
         setError('User not found.');
+        setPassword('');
         return;
       }
 
@@ -48,8 +49,12 @@ export default function LoginPage() {
 
       if (authError) {
         setError('Invalid credentials.');
+        setPassword('');
         return;
       }
+
+      // Never leave the password in component state after a successful login.
+      setPassword('');
 
       // Step 3: Role-based redirection
       const role = (user_role || '').toUpperCase();
@@ -79,7 +84,7 @@ export default function LoginPage() {
       identifierPlaceholder: 'e.g. 123456789V or name@example.com',
       passwordLabel: 'Password',
       passwordPlaceholder: 'Enter your password',
-      rememberDevice: 'Remember this device',
+      sessionNotice: 'For security, you are signed in on this tab only. A new tab or browser restart always asks for credentials again.',
       forgotPassword: 'Forgot Password?',
       loginButton: 'Log in to portal',
       quickLogin: 'or quick login with',
@@ -102,7 +107,7 @@ export default function LoginPage() {
       identifierPlaceholder: 'උදා: 123456789V හෝ name@example.com',
       passwordLabel: 'මුරපදය',
       passwordPlaceholder: 'ඔබගේ මුරපදය ඇතුළත් කරන්න',
-      rememberDevice: 'මෙම උපාංගය මතක තබා ගන්න',
+      sessionNotice: 'ආරක්ෂාව සඳහා, ඔබ මෙම ටැබ් එකේ පමණක් පුරනය වී සිටී. නව ටැබ් එකක් හෝ බ්‍රවුසරය නැවත ආරම්භ කිරීමේදී සෑම විටම අක්තපත්‍ර නැවත ඇතුළත් කළ යුතුය.',
       forgotPassword: 'මුරපදය අමතකද?',
       loginButton: 'ද්වාරයට පුරනය වන්න',
       quickLogin: 'හෝ වේගවත් පිවිසුමක්',
@@ -167,14 +172,16 @@ export default function LoginPage() {
               </div>
             )}
 
-            <form className="space-y-5" onSubmit={handleSubmit}>
+            <form className="space-y-5" onSubmit={handleSubmit} autoComplete="off">
               <div>
                 <label htmlFor="login-identifier" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">
                   {t.identifierLabel}
                 </label>
                 <input
                   id="login-identifier"
+                  name="username"
                   type="text"
+                  autoComplete="username"
                   value={identifier}
                   onChange={(e) => {
                     setIdentifier(e.target.value);
@@ -197,7 +204,9 @@ export default function LoginPage() {
                 <div className="relative">
                   <input
                     id="password"
+                    name="current-password"
                     type="password"
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
@@ -209,12 +218,9 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-4">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#00a8cc] focus:ring-[#00b8e6]" />
-                  {t.rememberDevice}
-                </label>
-              </div>
+              <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+                {t.sessionNotice}
+              </p>
 
               <button
                 type="submit"

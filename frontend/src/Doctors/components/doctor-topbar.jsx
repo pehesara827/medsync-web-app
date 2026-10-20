@@ -1,6 +1,13 @@
-import { useLocation } from 'react-router-dom';
-import { Search, Bell, Settings, Sun, Moon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Search, Bell, Sun, Moon } from 'lucide-react';
+import { supabase } from '../../../supabaseClient';
 import { useDarkMode } from '../../context/useDarkMode';
+import NotificationPanel from '../../Patients/components/NotificationPanel';
+
+// Shown when the doctor has no profile picture yet.
+const FALLBACK_AVATAR_URL =
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256';
 
 // Map route paths to dynamic titles
 const PAGE_TITLES = {
@@ -9,17 +16,79 @@ const PAGE_TITLES = {
   '/doctor/appointments': 'Appointments',
   '/doctor/schedule-manager': 'Schedule Manager',
   '/doctor/profile': 'Profile',
+  '/doctor/reset-password': 'Reset Password',
 };
 
 export default function DoctorTopbar({ onMenuClick, placeholder = 'Search patients, records...' }) {
   const { darkMode, toggleDarkMode } = useDarkMode();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [doctorName, setDoctorName] = useState('');
+  const [profilePicUrl, setProfilePicUrl] = useState(FALLBACK_AVATAR_URL);
+
+  const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+  useEffect(() => {
+    const resolveUser = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (user?.id) setUserId(user.id);
+    };
+    resolveUser();
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    const fetchDoctorHeader = async () => {
+      try {
+        const response = await fetch(`${backendUrl}/doctor/profile/${userId}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data?.doctor?.fullName) setDoctorName(data.doctor.fullName);
+        if (data?.doctor?.doctorImage) setProfilePicUrl(data.doctor.doctorImage);
+      } catch (err) {
+        console.error('Failed to fetch doctor header info:', err);
+      }
+    };
+    fetchDoctorHeader();
+  }, [userId, backendUrl, location.pathname]);
 
   // Get current page title dynamically from route
   const currentTitle =
     PAGE_TITLES[location.pathname] ||
     location.pathname.replace('/doctor/', '').replace('-', ' ') ||
     'Dashboard';
+
+  // ── Unread count (poll + realtime, same as patient header) ───────────────
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await fetch(`${backendUrl}/api/notifications/unread-count/${userId}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled) setUnreadCount(data.count || 0);
+      } catch (err) {
+        console.error('Failed to fetch unread notification count:', err);
+      }
+    };
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000);
+    const channel = supabase
+      .channel(`header:notifications:${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, fetchUnreadCount)
+      .subscribe();
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [userId, backendUrl]);
 
   return (
     <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200/80 dark:border-slate-700/80 px-4 md:px-8 py-2.5 md:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 select-none sticky top-0 z-10">
@@ -73,35 +142,51 @@ export default function DoctorTopbar({ onMenuClick, placeholder = 'Search patien
           {darkMode ? <Sun className="w-4 md:w-5 h-4 md:h-5" /> : <Moon className="w-4 md:w-5 h-4 md:h-5" />}
         </button>
 
-        {/* Notification Icon with Active Indicator Dot */}
+        {/* Notification Icon — opens the patient-style notification bar */}
         <button
           type="button"
           aria-label="Notifications"
+          onClick={() => setIsNotificationOpen(true)}
           className="relative p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
         >
           <Bell className="w-4 md:w-5 h-4 md:h-5" />
-          {/* Active Blue Dot Badge */}
-          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-[#00a8cc] rounded-full ring-1 md:ring-2 ring-white" />
+          {unreadCount > 0 && (
+            <span
+              className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-4.5 px-1 text-[10px] font-bold text-white bg-[#00b8e6] rounded-full ring-2 ring-white dark:ring-slate-800"
+              aria-label={`${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`}
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </button>
 
-        {/* Settings Icon */}
+        {/* User Profile Avatar — navigates to the doctor profile page */}
         <button
           type="button"
-          aria-label="Settings"
-          className="p-1 md:p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
+          onClick={() => navigate('/doctor/profile')}
+          aria-label="Go to profile"
+          title={doctorName || 'Go to profile'}
+          className="w-7 md:w-9 h-7 md:h-9 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0 hover:ring-2 hover:ring-[#00a8cc]/40 transition focus:outline-none focus:ring-2 focus:ring-[#00a8cc]/50"
         >
-          <Settings className="w-4 md:w-5 h-4 md:h-5" />
-        </button>
-
-        {/* User Profile Avatar */}
-        <div className="w-7 md:w-9 h-7 md:h-9 rounded-full overflow-hidden border border-slate-200 cursor-pointer shadow-sm flex-shrink-0">
           <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256"
-            alt="User profile"
+            src={profilePicUrl}
+            alt={doctorName ? `${doctorName} profile` : 'Doctor profile'}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              if (e.currentTarget.src !== FALLBACK_AVATAR_URL) {
+                e.currentTarget.src = FALLBACK_AVATAR_URL;
+              }
+            }}
           />
-        </div>
+        </button>
       </div>
+
+      {/* Notification Slide-out Side Panel */}
+      <NotificationPanel
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        userId={userId}
+      />
     </header>
   );
 }

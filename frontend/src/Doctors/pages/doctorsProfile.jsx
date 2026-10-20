@@ -1,24 +1,55 @@
-import { useState, useEffect } from 'react';
-import { Mail, Pencil, BadgeCheck, GraduationCap, Stethoscope, Save } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Mail,
+  Pencil,
+  BadgeCheck,
+  GraduationCap,
+  Stethoscope,
+  Save,
+  Camera,
+  Loader2,
+  KeyRound,
+  User,
+} from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { AVATAR_BUCKET, MAX_IMAGE_BYTES, MAX_IMAGE_LABEL, ALLOWED_AVATAR_TYPES } from '../../utils/uploadLimits';
+
+// ── Profile picture upload (5 MB max — same bucket / limits as the patient side) ──────
+
+const initialsOf = (name) =>
+  (name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
 export default function DoctorProfile() {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const fileInputRef = useRef(null);
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
     specialization: '',
     experienceYears: '',
-    doctorImage: '',
     description: '',
     education: '',
     consultationFee: '',
   });
+
+  // ── Reset password lives on its own page (/doctor/reset-password) ──────────
+  // The edit-mode button below just navigates there — no popup here.
+
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -55,7 +86,6 @@ export default function DoctorProfile() {
       lastName: profile.lastName || '',
       specialization: profile.specialization || '',
       experienceYears: profile.experienceYears ?? '',
-      doctorImage: profile.doctorImage || '',
       description: (profile.bio || []).join('\n'),
       education: (profile.education || []).join('\n'),
       consultationFee: profile.consultationFee ?? '',
@@ -92,7 +122,6 @@ export default function DoctorProfile() {
         last_name: form.lastName,
         specialization: form.specialization,
         experience_years: form.experienceYears ? Number(form.experienceYears) : undefined,
-        doctor_image: form.doctorImage,
         description: form.description,
         education: form.education
           .split('\n')
@@ -121,6 +150,73 @@ export default function DoctorProfile() {
       setSaving(false);
     }
   };
+
+  /**
+   * Profile photo change via the camera icon (mirrors the patient flow).
+   * Uploads to the `profile-pictures` bucket, then asks the backend to store
+   * the new URL and delete the replaced file. Rolls the upload back on error.
+   */
+  const handleAvatarSelect = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow picking the same file again later
+    if (!file) return;
+
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      setError('Please choose a PNG, JPG or WEBP image.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError(`Profile pictures must be ${MAX_IMAGE_LABEL} or smaller.`);
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    if (!user) {
+      setError('You must be logged in to change your profile picture.');
+      return;
+    }
+
+    setAvatarBusy(true);
+    setError('');
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `avatars/${user.id}_${Date.now()}_${safeName}`;
+    let uploadedPath = null;
+
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
+      if (uploadError) throw new Error(`Failed to upload image: ${uploadError.message}`);
+      uploadedPath = filePath;
+
+      const { data: publicUrlData } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(filePath);
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${backendUrl}/doctor/profile/${user.id}/photo`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profilePictureUrl: publicUrlData.publicUrl }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `Failed to save photo (${response.status})`);
+      }
+      const data = await response.json();
+      const newUrl = data?.doctor?.doctorImage || publicUrlData.publicUrl;
+      setProfile((prev) => (prev ? { ...prev, doctorImage: newUrl } : prev));
+      uploadedPath = null; // backend owns the file from here on
+    } catch (err) {
+      if (uploadedPath) {
+        await supabase.storage.from(AVATAR_BUCKET).remove([uploadedPath]);
+      }
+      setError(`Failed to update profile picture: ${err.message}`);
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  // ── Reset password lives on /doctor/reset-password (no popup here) ─────────
 
   if (loading) {
     return <LoadingSpinner message="Loading your profile" />;
@@ -173,10 +269,34 @@ export default function DoctorProfile() {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-600 flex-shrink-0 overflow-hidden">
-            {profile.doctorImage && (
-              <img src={profile.doctorImage} alt={profile.fullName} className="w-full h-full object-cover" />
-            )}
+          {/* Profile photo — click the camera icon to change it */}
+          <div className="relative flex-shrink-0">
+            <div className="w-16 h-16 rounded-full bg-cyan-100 dark:bg-slate-600 overflow-hidden flex items-center justify-center">
+              {profile.doctorImage ? (
+                <img src={profile.doctorImage} alt={profile.fullName} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-lg font-bold text-cyan-700 dark:text-cyan-200">
+                  {initialsOf(profile.fullName) || <User className="w-6 h-6" />}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarBusy}
+              aria-label="Change profile photo"
+              title="Change profile photo"
+              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-cyan-500 hover:bg-cyan-600 text-white flex items-center justify-center shadow-md border-2 border-white dark:border-slate-800 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {avatarBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              className="hidden"
+              onChange={handleAvatarSelect}
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -188,6 +308,9 @@ export default function DoctorProfile() {
               )}
             </div>
             <p className="text-sm text-cyan-600 dark:text-cyan-400 mt-0.5">{profile.specialtyName || profile.specialization}</p>
+            {profile.username && (
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">@{profile.username}</p>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 mt-5 pt-5 border-t border-slate-100 dark:border-slate-700 text-center">
@@ -209,13 +332,21 @@ export default function DoctorProfile() {
             <Mail className="w-4 h-4 text-slate-400 dark:text-slate-500" />
             <p className="text-slate-700 dark:text-slate-300">{profile.email || '—'}</p>
           </div>
+          {profile.username && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+              <p className="text-slate-700 dark:text-slate-300">@{profile.username}</p>
+            </div>
+          )}
         </div>
-        <button
-          onClick={startEditing}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-cyan-500 text-white text-sm font-medium hover:bg-cyan-600"
-        >
-          <Pencil className="w-4 h-4" /> Edit Profile
-        </button>
+        <div className="space-y-2.5">
+          <button
+            onClick={startEditing}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-cyan-500 text-white text-sm font-medium hover:bg-cyan-600"
+          >
+            <Pencil className="w-4 h-4" /> Edit Profile
+          </button>
+        </div>
       </div>
 
       {isEditing ? (
@@ -277,16 +408,6 @@ export default function DoctorProfile() {
                 placeholder="e.g. 5000"
               />
             </div>
-            <div>
-              <label className={labelClass}>Profile Image URL</label>
-              <input
-                name="doctorImage"
-                value={form.doctorImage}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="https://..."
-              />
-            </div>
             <div className="md:col-span-2">
               <label className={labelClass}>Professional Bio</label>
               <textarea
@@ -311,20 +432,29 @@ export default function DoctorProfile() {
             </div>
           </div>
 
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 mt-6">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
             <button
-              onClick={cancelEditing}
-              className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+              type="button"
+              onClick={() => navigate('/doctor/reset-password')}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-cyan-500/40 text-cyan-700 dark:text-cyan-300 text-sm font-medium hover:bg-cyan-50 dark:hover:bg-cyan-950/30 transition"
             >
-              Cancel
+              <KeyRound className="w-4 h-4" /> Reset Password
             </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-cyan-500 text-white text-sm font-medium hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Changes'}
-            </button>
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3">
+              <button
+                onClick={cancelEditing}
+                className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-cyan-500 text-white text-sm font-medium hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
           </div>
         </div>
       ) : (
