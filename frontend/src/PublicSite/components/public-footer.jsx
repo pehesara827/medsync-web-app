@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MapPin, Phone, Mail } from 'lucide-react';
+import Logo from '../../components/Logo';
 
 export default function PublicFooter() {
   return (
@@ -7,14 +8,8 @@ export default function PublicFooter() {
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         <div className="grid gap-12 lg:grid-cols-3">
           <div>
-            <div className="mb-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-cyan-400 to-sky-600 flex items-center justify-center text-white text-lg font-bold shadow-lg">
-                M
-              </div>
-              <div>
-                <p className="text-xl font-semibold">MedSync</p>
-                <p className="text-slate-400 text-sm">Modern care built around you.</p>
-              </div>
+            <div className="mb-4">
+              <Logo size="md" tone="light" subtitle="Modern care built around you." />
             </div>
             <p className="text-slate-400 text-sm leading-7">
               MedSync empowers patients with seamless, compassionate healthcare and a modern digital experience.

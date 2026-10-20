@@ -1,6 +1,7 @@
 // frontend/src/components/ChatWidget.jsx
 import { useEffect, useRef, useState } from 'react';
-import { MessageCircle, X, Minus, Send, ShieldAlert } from 'lucide-react';
+import { X, Minus, Send, ShieldAlert } from 'lucide-react';
+import Logo from './Logo';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -85,12 +86,12 @@ export default function ChatWidget() {
       {/* Chat window */}
       {isOpen && (
         <div className="fixed bottom-24 right-6 z-50 flex h-[560px] max-h-[calc(100vh-7rem)] w-[380px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-          {/* Header */}
+          {/* Header — canonical MedSync mark */}
           <div className="flex items-center justify-between gap-2 bg-[#00a8cc] px-4 py-3 text-white">
             <div className="flex min-w-0 items-center gap-2.5">
-              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white/20">
-                <MessageCircle className="h-5 w-5" />
-              </div>
+              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white p-1">
+                <Logo size="xs" iconOnly />
+              </span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold leading-tight">
                   MedSync Assistant

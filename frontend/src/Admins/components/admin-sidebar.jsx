@@ -7,11 +7,11 @@ import {
   CalendarClock,
   CreditCard,
   LogOut,
-  ShieldCheck,
   Stethoscope,
   ScanLine,
 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
+import Logo from '../../components/Logo';
 
 // Central place for every admin nav entry. Add/remove items here only —
 // the sidebar below just maps over this list.
@@ -130,17 +130,10 @@ export default function AdminSidebar({ isOpen, onClose }) {
         }
       >
         <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-100 dark:border-slate-700">
-          <div className="w-9 h-9 rounded-lg bg-[#e0f5f8] dark:bg-slate-700 flex items-center justify-center">
-            <ShieldCheck className="w-4.5 h-4.5 text-[#00a8cc] dark:text-cyan-400" />
-          </div>
-          <div>
-            <p className="text-slate-900 dark:text-slate-100 font-semibold leading-tight">
-              {adminName || 'MedSync Admin'}
-            </p>
-            <p className="text-[10px] tracking-wide text-slate-400 dark:text-slate-400 leading-tight">
-              HOSPITAL COMMAND CENTER
-            </p>
-          </div>
+          <Logo
+            size="sm"
+            subtitle={adminName || 'Hospital Command Center'}
+          />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">

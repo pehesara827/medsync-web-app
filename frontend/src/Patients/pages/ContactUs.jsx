@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Send, Clock } from 'lucide-react';
 import { CONTACT_INFO, OPERATING_HOURS } from "../../data/contactData";
 import Reveal from "../../PublicSite/components/reveal";
+import Logo from "../../components/Logo";
 
 export default function ContactUs() {
   const [formData, setFormData] = useState({
@@ -197,8 +198,8 @@ export default function ContactUs() {
     
       <footer className="bg-[#0D1C32] text-white mt-12 py-8 px-8">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <div className="text-lg font-bold">MedSync</div>
+          <div className="flex flex-col gap-2">
+            <Logo size="sm" tone="light" />
             <p className="text-xs text-[#76849F] mt-1">
               © 2026 MedSync Healthcare. All rights reserved.
             </p>

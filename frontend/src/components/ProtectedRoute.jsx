@@ -50,10 +50,9 @@ export default function ProtectedRoute({ allowedRoles = [] }) {
         if (!isMounted) return;
 
         if (error) {
-          // Fall back to the role stored in auth user metadata
-          setRole(currentSession.user.user_metadata?.role ?? null);
+          setRole(null);
         } else {
-          setRole(userRow?.role ?? currentSession.user.user_metadata?.role ?? null);
+          setRole(userRow?.role ?? null);
         }
       } catch {
         if (isMounted) {

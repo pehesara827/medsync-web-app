@@ -16,6 +16,7 @@ import {
   getScannedAppointment,
   confirmScannedAppointment,
 } from '../controllers/adminController.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 import {
   getAdminDoctorsAll,
   approveDoctor,
@@ -44,6 +45,9 @@ import {
 } from '../controllers/queueController.js';
 
 const router = Router();
+
+router.use(requireAuth);
+router.use(requireRole(['ADMIN']));
 
 // GET /api/admin/dashboard - Admin dashboard aggregate metrics
 router.get('/dashboard', getAdminDashboard);

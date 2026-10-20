@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../supabaseClient';
+import Logo from '../../components/Logo';
 import { MAX_IMAGE_BYTES, MAX_IMAGE_LABEL, ALLOWED_AVATAR_TYPES, ALLOWED_AVATAR_LABEL } from '../../utils/uploadLimits';
 import Step1PersonalInfo from './Step1PersonalInfo';
 import Step2EmergencyContact from './Step2EmergencyContact';
@@ -252,11 +253,14 @@ export default function PatientRegistration() {
     <div className="min-h-screen bg-slate-100 py-10 px-4 sm:px-6 lg:px-8 dark:bg-slate-950">
       <div className="mx-auto max-w-4xl">
         <div className="rounded-[32px] bg-white p-8 shadow-sm dark:bg-slate-900">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Patient Registration</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Please enter your details to create your medical portal account.
-            </p>
+          <div className="mb-8 flex flex-col items-center text-center gap-4">
+            <Logo size="lg" subtitle="Patient Registration" />
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Patient Registration</h1>
+              <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                Please enter your details to create your medical portal account.
+              </p>
+            </div>
           </div>
 
           <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

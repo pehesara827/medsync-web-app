@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../supabaseClient';
+import Logo from '../../components/Logo';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -132,15 +133,7 @@ export default function LoginPage() {
           <section className="w-full lg:w-1/2 rounded-[28px] bg-white/70 border border-slate-200 shadow-[0_24px_80px_rgba(15,23,42,0.08)] p-8 sm:p-10 backdrop-blur-sm dark:bg-slate-900/90 dark:border-slate-700">
             <div className="flex items-center justify-between mb-10">
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-2xl bg-[#00b8e6]/10 flex items-center justify-center text-[#00a8cc] shadow-sm">
-                  <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current">
-                    <path d="M19 7h-3V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm-9-2h4v2h-4V5zm3 9h-2v2H11v-2H9v-2h2v-2h2v2h2v2z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm uppercase tracking-[0.35em] text-slate-400 dark:text-slate-500">{t.medicalPortal}</p>
-                  <p className="text-slate-600 text-sm dark:text-slate-400">{t.securePatient}</p>
-                </div>
+                <Logo size="lg" subtitle={`${t.medicalPortal} • ${t.securePatient}`} />
               </div>
               <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
                 <button

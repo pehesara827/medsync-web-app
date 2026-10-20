@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, CalendarDays, CalendarClock, UserCircle, LogOut, Stethoscope } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, CalendarClock, UserCircle, LogOut } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
+import Logo from '../../components/Logo';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', path: '/doctor', end: true, icon: LayoutDashboard },
@@ -80,15 +81,7 @@ export default function DoctorSidebar({ isOpen, onClose }) {
         }
       >
         <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-100 dark:border-slate-700">
-          <div className="w-9 h-9 rounded-lg bg-cyan-50 dark:bg-slate-700 flex items-center justify-center">
-            <Stethoscope className="w-4.5 h-4.5 text-cyan-600 dark:text-cyan-400" />
-          </div>
-          <div>
-            <p className="text-slate-900 dark:text-slate-100 font-semibold leading-tight">
-              {doctorName || 'Clinical Neon'}
-            </p>
-            <p className="text-[10px] tracking-wide text-slate-400 dark:text-slate-400 leading-tight">MEDICAL PORTAL</p>
-          </div>
+          <Logo size="sm" subtitle={doctorName || 'Medical Portal'} />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../supabaseClient';
+import Logo from '../../components/Logo';
 
 const NAV_ITEMS = [
   {
@@ -101,21 +102,9 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Top Section */}
         <div className="flex flex-col gap-8">
           
-          {/* Brand Header */}
+          {/* Brand Header — canonical MedSync mark (shared <Logo />) */}
           <div className="flex items-center gap-3.5 px-1 pt-1">
-            <div className="w-12 h-12 rounded-2xl bg-[#e6f7fa] border border-[#b2ebf2] flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.15)] flex-shrink-0">
-              <svg className="w-6 h-6 text-[#00b0d8]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[#00b0d8] dark:text-[#00b0d8] font-bold text-lg leading-snug tracking-tight">
-                Medical Portal
-              </span>
-              <span className="text-slate-500 dark:text-slate-400 text-xs font-medium">
-                Clinical Precision v1.0
-              </span>
-            </div>
+            <Logo size="lg" subtitle="Clinical Precision v1.0" />
           </div>
 
           {/* Navigation Links */}

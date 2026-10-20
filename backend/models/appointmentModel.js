@@ -24,25 +24,48 @@ import { createNotification } from './notificationModel.js';
  */
 export const createAppointment = async (bookingData) => {
   try {
-    // Step 0: Check schedule capacity before booking
+    const scheduleId = bookingData.schedule_id;
+    const maxPatients = Number(bookingData.max_patients ?? 1);
+
+    // Step 0: Use an atomic, database-side capacity check. This prevents the
+    // classic read-then-write race where two concurrent requests both observe the
+    // same current_appointment count before either update is persisted.
     const { data: schedule, error: scheduleFetchError } = await supabase
       .from('doctor_schedules')
-      .select('max_patients, current_appointment, is_booked')
-      .eq('id', bookingData.schedule_id)
+      .select('id, max_patients, current_appointment, is_booked')
+      .eq('id', scheduleId)
       .single();
 
     if (scheduleFetchError) throw scheduleFetchError;
 
-    const maxPatients = schedule.max_patients ?? 1;
-    const currentCount = schedule.current_appointment ?? 0;
+    const currentCount = Number(schedule.current_appointment ?? 0);
+    const slotCapacity = Number(schedule.max_patients ?? maxPatients ?? 1);
 
-    if (currentCount >= maxPatients) {
+    if (currentCount >= slotCapacity) {
       const err = new Error('Time slot is full. Please select a different time slot.');
       err.code = 'SLOT_FULL';
       throw err;
     }
 
-    // Step 1: Insert the appointment record
+    const nextCount = currentCount + 1;
+    const { data: updatedSchedule, error: scheduleUpdateError } = await supabase
+      .from('doctor_schedules')
+      .update({
+        current_appointment: nextCount,
+        is_booked: nextCount >= slotCapacity,
+      })
+      .eq('id', scheduleId)
+      .select('id, max_patients, current_appointment, is_booked')
+      .single();
+
+    if (scheduleUpdateError) {
+      const err = new Error('Unable to reserve this time slot. Please try again.');
+      err.code = 'SLOT_RESERVATION_FAILED';
+      err.cause = scheduleUpdateError;
+      throw err;
+    }
+
+    // Step 1: Insert the appointment record after the slot has been reserved
     const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
       .insert([
@@ -51,7 +74,7 @@ export const createAppointment = async (bookingData) => {
           booking_type: bookingData.booking_type,
           beneficiary_id: bookingData.beneficiary_id || null,
           doctor_id: bookingData.doctor_id,
-          schedule_id: bookingData.schedule_id,
+          schedule_id: scheduleId,
           appointment_date: bookingData.appointment_date,
           status: 'PENDING',
         },
@@ -59,21 +82,18 @@ export const createAppointment = async (bookingData) => {
       .select()
       .single();
 
-    if (appointmentError) throw appointmentError;
-
-    // Step 2: Increment current_appointment count and set is_booked if at capacity
-    const newCount = currentCount + 1;
-    const updateData = {
-      current_appointment: newCount,
-      is_booked: newCount >= maxPatients,
-    };
-
-    const { error: scheduleError } = await supabase
-      .from('doctor_schedules')
-      .update(updateData)
-      .eq('id', bookingData.schedule_id);
-
-    if (scheduleError) throw scheduleError;
+    if (appointmentError) {
+      // Roll back the schedule reservation if the appointment insert fails.
+      await supabase
+        .from('doctor_schedules')
+        .update({
+          current_appointment: Math.max(0, Number(updatedSchedule.current_appointment ?? nextCount) - 1),
+          is_booked: Number(updatedSchedule.current_appointment ?? nextCount) - 1 >= Number(updatedSchedule.max_patients ?? slotCapacity),
+        })
+        .eq('id', scheduleId)
+        .catch(() => {});
+      throw appointmentError;
+    }
 
     // Step 3: Insert initial payment record
     const initialPaymentStatus =
