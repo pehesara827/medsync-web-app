@@ -1,6 +1,6 @@
 // src/Patients/pages/patients-doctors.jsx
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../../supabaseClient';
+import { supabase, getAuthHeaders } from '../../../supabaseClient';
 import BrowseSpecialtySection from '../components/BrowseSpecialtySection';
 import DoctorSearchFilters from '../components/DoctorSearchFilters';
 import MainDoctorsCard from '../components/MainDoctorsCard';
@@ -23,7 +23,13 @@ export default function PatientsDoctors() {
       if (dateValue) params.set('date', dateValue);
       if (specialtyValue && specialtyValue !== 'All Specialties') params.set('specialty', specialtyValue);
       const qs = params.toString() ? `?${params.toString()}` : '';
-      const response = await fetch(`${backendUrl}/api/doctors${qs}`);
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(await getAuthHeaders()),
+      };
+      const response = await fetch(`${backendUrl}/api/doctors${qs}`, {
+        headers,
+      });
 
       if (!response.ok) {
         throw new Error('Failed to fetch doctors');
@@ -45,7 +51,12 @@ export default function PatientsDoctors() {
             .eq('user_id', user.id)
             .maybeSingle();
           if (profile?.id) {
-            const favRes = await fetch(`${backendUrl}/api/favorites/patient/${profile.id}`);
+            const favRes = await fetch(`${backendUrl}/api/favorites/patient/${profile.id}`, {
+              headers: {
+                'Content-Type': 'application/json',
+                ...(await getAuthHeaders()),
+              },
+            });
             if (favRes.ok) {
               const favData = await favRes.json();
               const ids = favData.favoriteDoctorIds || (favData.favorites || []).map((f) => f.id);

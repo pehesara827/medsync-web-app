@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { supabase } from '../../../supabaseClient';
+import { supabase, getAuthHeaders } from '../../../supabaseClient';
 import AppointmentFilterBar from '../components/AppointmentFilterBar';
 import AppointmentsTable from '../components/AppointmentsTable';
 import BookAppointmentModal from '../components/BookAppointmentModal';
@@ -126,7 +126,12 @@ export default function PatientsAppointments() {
 
         // Fetch waitlist entries
         try {
-          const waitlistResponse = await fetch(`${backendUrl}/api/waitlist/patient/${patientId}`);
+          const waitlistResponse = await fetch(`${backendUrl}/api/waitlist/patient/${patientId}`, {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(await getAuthHeaders()),
+            },
+          });
           if (waitlistResponse.ok) {
             const waitlistData = await waitlistResponse.json();
             setWaitlistEntries(waitlistData.waitlist || []);
@@ -345,9 +350,13 @@ export default function PatientsAppointments() {
     setCancellingId(appointment.id);
     setCancelError('');
     try {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(await getAuthHeaders()),
+      };
       const response = await fetch(`${backendUrl}/api/appointments/${appointment.id}/cancel`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
       });
 
       if (!response.ok) {

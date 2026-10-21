@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { getAuthHeaders } from '../../../supabaseClient';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import AppointmentConfirmationPass from './AppointmentConfirmationPass';
 
@@ -29,7 +30,13 @@ export default function QRCodeModal({ isOpen, onClose, appointment }) {
       setPassData(null);
       try {
         const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-        const response = await fetch(`${backendUrl}/api/appointments/${appointment.id}/pass`);
+        const headers = {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
+        };
+        const response = await fetch(`${backendUrl}/api/appointments/${appointment.id}/pass`, {
+          headers,
+        });
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
