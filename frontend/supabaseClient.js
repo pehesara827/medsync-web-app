@@ -26,6 +26,18 @@ clearLegacyPersistentAuthTokens();
 const sessionStorageAvailable =
   typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
 
+/**
+ * Returns fetch headers carrying the current Supabase access token as a
+ * Bearer token, so protected backend routes (requireAuth) can validate it.
+ * Returns an empty object when no session exists (caller should handle 401).
+ */
+export const getAuthHeaders = async () => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: sessionStorageAvailable ? window.sessionStorage : undefined,

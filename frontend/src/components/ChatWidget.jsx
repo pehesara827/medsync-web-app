@@ -1,6 +1,6 @@
 // frontend/src/components/ChatWidget.jsx
 import { useEffect, useRef, useState } from 'react';
-import { X, Minus, Send, ShieldAlert } from 'lucide-react';
+import { X, Minus, Send, ShieldAlert, MessageCircle } from 'lucide-react';
 import Logo from './Logo';
 
 const API_BASE_URL =

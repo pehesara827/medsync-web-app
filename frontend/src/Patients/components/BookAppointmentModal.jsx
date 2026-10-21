@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, User, Calendar, CreditCard, ChevronDown, Loader2, AlertCircle, CheckCircle2, Upload, FileText, Building2, ArrowLeft, ArrowRight, Landmark, Lock, ShieldCheck, Copy, Check, Download, Camera, ExternalLink } from 'lucide-react';
-import { supabase } from '../../../supabaseClient';
+import { supabase, getAuthHeaders } from '../../../supabaseClient';
 import { MAX_SLIP_BYTES, MAX_SLIP_LABEL, ALLOWED_SLIP_TYPES, ALLOWED_SLIP_LABEL } from '../../utils/uploadLimits';
 import AppointmentConfirmationPass from './AppointmentConfirmationPass';
 import WaitlistModal from './WaitlistModal';
@@ -551,11 +551,13 @@ export default function BookAppointmentModal({
         requestBody = bookingData;
       }
 
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(await getAuthHeaders()),
+      };
       const response = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(requestBody),
       });
 

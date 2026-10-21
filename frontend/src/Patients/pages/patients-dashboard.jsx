@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../supabaseClient';
+import { supabase, getAuthHeaders } from '../../../supabaseClient';
 import BookNewAppointmentButton from '../components/BookNewButton';
 import AppointmentsCarousel from '../components/AppointmentsCarousel';
 import FavoriteDoctorsCarousel from '../components/FavoriteDoctorsCarousel';
@@ -76,7 +76,13 @@ export default function PatientsDashboard() {
         setPatientId(profile.id);
 
         const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-        const response = await fetch(`${backendUrl}/api/appointments/patient/${profile.id}`);
+        const headers = {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
+        };
+        const response = await fetch(`${backendUrl}/api/appointments/patient/${profile.id}`, {
+          headers,
+        });
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
