@@ -68,7 +68,7 @@ export default function PatientProfile() {
         return;
       }
 
-      const response = await axios.get(`http://localhost:5000/api/patient/profile/${user.id}`);
+      const response = await axios.get(`${API_BASE_URL}/patient/profile/${user.id}`);
       setProfile(response.data.data);
       setLoading(false);
     } catch (error) {
@@ -107,7 +107,7 @@ export default function PatientProfile() {
         address: profile.address
       };
 
-      await axios.put(`http://localhost:5000/api/patient/profile/${user.id}`, payload);
+      await axios.put(`${API_BASE_URL}/patient/profile/${user.id}`, payload);
       alert("Profile updated successfully!");
       setIsEditing(false);
       fetchProfile();
@@ -128,7 +128,7 @@ export default function PatientProfile() {
         return;
       }
 
-      await axios.post(`http://localhost:5000/api/patient/profile/${user.id}/emergency-contact`, newContact);
+      await axios.post(`${API_BASE_URL}/patient/profile/${user.id}/emergency-contact`, newContact);
       alert("Emergency contact saved!");
       setShowContactModal(false);
       setNewContact({ name: '', relation: '', phone: '' });

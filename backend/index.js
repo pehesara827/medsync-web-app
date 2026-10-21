@@ -21,8 +21,17 @@ const allowedOrigins = process.env.CORS_ORIGINS
 app.use(
   cors({
     origin: (origin, callback) => {
-      callback(null, !origin || allowedOrigins.includes(origin));
+      // Allow requests with no origin (e.g. mobile apps, curl) and any origin
+      // in the CORS_ORIGINS allow-list. Never use a blanket wildcard.
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
     },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    optionsSuccessStatus: 204,
+    credentials: true,
   })
 );
 app.use(express.json());
