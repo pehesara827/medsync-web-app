@@ -21,6 +21,8 @@ const FALLBACK_SPECIALTIES = [
   'Family Medicine',
 ];
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+
 export default function DoctorSearchFilters({
   query,
   onQueryChange,
@@ -38,7 +40,7 @@ export default function DoctorSearchFilters({
 
     (async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/specialties');
+        const response = await fetch(`${BACKEND_URL}/api/specialties`);
         if (!response.ok) {
           throw new Error('Failed to fetch specialties');
         }
