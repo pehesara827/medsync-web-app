@@ -17,6 +17,8 @@ const ICON_MAP = {
   'Pediatrics': Smile,
 };
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+
 export default function BrowseSpecialtySection({ selectedSpecialty, onSelect }) {
   const [specialties, setSpecialties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +28,7 @@ export default function BrowseSpecialtySection({ selectedSpecialty, onSelect }) 
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('http://localhost:5000/api/specialties/top');
+      const response = await fetch(`${BACKEND_URL}/api/specialties/top`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch specialties');
