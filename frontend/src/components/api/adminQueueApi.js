@@ -2,6 +2,8 @@
 // Thin client for the Admin Queue Management backend endpoints.
 // Uses the same base-URL convention as the other Admin pages
 // (native fetch + VITE_API_BASE_URL).
+import { getAuthHeaders } from '../../../supabaseClient';
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -10,7 +12,9 @@ const API_BASE_URL =
  * @returns {Promise<Array>} Today's schedule session headers.
  */
 export const fetchTodayQueues = async () => {
-  const res = await fetch(`${API_BASE_URL}/admin/queue/today`);
+  const res = await fetch(`${API_BASE_URL}/admin/queue/today`, {
+    headers: await getAuthHeaders(),
+  });
   if (!res.ok) {
     throw new Error(`Failed to load today's queues (HTTP ${res.status})`);
   }
@@ -24,7 +28,9 @@ export const fetchTodayQueues = async () => {
  * @returns {Promise<Object>} The full session payload (doctor, slot, queue).
  */
 export const fetchQueueSession = async (scheduleId) => {
-  const res = await fetch(`${API_BASE_URL}/admin/queue/${scheduleId}`);
+  const res = await fetch(`${API_BASE_URL}/admin/queue/${scheduleId}`, {
+    headers: await getAuthHeaders(),
+  });
   if (!res.ok) {
     throw new Error(`Failed to load session (HTTP ${res.status})`);
   }
@@ -41,7 +47,13 @@ export const fetchQueueSession = async (scheduleId) => {
 export const markAppointmentCompleted = async (appointmentId) => {
   const res = await fetch(
     `${API_BASE_URL}/admin/queue/${appointmentId}/complete`,
-    { method: 'PATCH', headers: { 'Content-Type': 'application/json' } },
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await getAuthHeaders()),
+      },
+    }
   );
   if (!res.ok) {
     throw new Error(`Failed to mark completed (HTTP ${res.status})`);

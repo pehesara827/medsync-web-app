@@ -25,6 +25,7 @@ import {
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AddNewDoctorModal from '../components/AddNewDoctorModal';
 import EditDoctorModal from '../components/EditDoctorModal';
+import { getAuthHeaders } from '../../../supabaseClient';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -505,7 +506,10 @@ export default function DoctorManagement() {
 
         const res = await fetch(
           `${API_BASE_URL}/admin/doctors-management?${params.toString()}`,
-          { signal }
+          {
+            signal,
+            headers: await getAuthHeaders(),
+          }
         );
         if (!res.ok) {
           throw new Error('Failed to load doctor data.');
@@ -527,7 +531,9 @@ export default function DoctorManagement() {
 
   const loadStats = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/doctors-management/stats`);
+      const res = await fetch(`${API_BASE_URL}/admin/doctors-management/stats`, {
+        headers: await getAuthHeaders(),
+      });
       if (!res.ok) return;
       const data = await res.json();
       setStats({
@@ -548,7 +554,9 @@ export default function DoctorManagement() {
     setReviewsLoading(true);
     setReviewsError('');
     try {
-      const res = await fetch(`${API_BASE_URL}/reviews/doctor/${doctorId}`);
+      const res = await fetch(`${API_BASE_URL}/reviews/doctor/${doctorId}`, {
+        headers: await getAuthHeaders(),
+      });
       if (!res.ok) throw new Error('Failed to load reviews.');
       const data = await res.json();
       setReviews(Array.isArray(data.reviews) ? data.reviews : []);
@@ -574,6 +582,7 @@ export default function DoctorManagement() {
     try {
       const res = await fetch(`${API_BASE_URL}/admin/doctors/${id}`, {
         method: 'DELETE',
+        headers: await getAuthHeaders(),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

@@ -1,6 +1,8 @@
 // src/components/api/adminScanApi.js
 // Thin client for the Admin "Scan QR" backend endpoint.
 // Uses the same base-URL convention as the other Admin pages.
+import { getAuthHeaders } from '../../../supabaseClient';
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -15,7 +17,9 @@ const API_BASE_URL =
  *   truth), so it can also be 'PENDING_SLIP_VERIFICATION'.
  */
 export const fetchScannedAppointment = async (appointmentId) => {
-  const res = await fetch(`${API_BASE_URL}/admin/scan/${appointmentId}`);
+  const res = await fetch(`${API_BASE_URL}/admin/scan/${appointmentId}`, {
+    headers: await getAuthHeaders(),
+  });
   if (!res.ok) {
     let message = `Failed to load appointment (HTTP ${res.status})`;
     try {
@@ -52,7 +56,10 @@ export const confirmScannedAppointment = async (
 ) => {
   const res = await fetch(`${API_BASE_URL}/admin/scan/${appointmentId}/confirm`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await getAuthHeaders()),
+    },
     body: JSON.stringify({ verifiedSlip }),
   });
   if (!res.ok) {

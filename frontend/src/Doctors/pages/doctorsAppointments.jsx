@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
-import { supabase } from '../../../supabaseClient';
+import { supabase, getAuthHeaders } from '../../../supabaseClient';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
 const STATUS_TONE = {
@@ -82,7 +82,9 @@ export default function DoctorAppointments() {
         const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
         // Get doctor profile to get doctor_id
-        const profileResponse = await fetch(`${backendUrl}/doctor/profile/${user.id}`);
+        const profileResponse = await fetch(`${backendUrl}/doctor/profile/${user.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!profileResponse.ok) {
           const errData = await profileResponse.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load doctor profile (${profileResponse.status})`);
@@ -90,7 +92,9 @@ export default function DoctorAppointments() {
         const profileData = await profileResponse.json();
 
         // Fetch appointments for the selected date
-        const apptResponse = await fetch(`${backendUrl}/doctor/appointments/${profileData.doctor.id}?date=${selectedDate}`);
+        const apptResponse = await fetch(`${backendUrl}/doctor/appointments/${profileData.doctor.id}?date=${selectedDate}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!apptResponse.ok) {
           const errData = await apptResponse.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load appointments (${apptResponse.status})`);
@@ -99,7 +103,9 @@ export default function DoctorAppointments() {
         setAppointments(apptData.appointments || []);
 
         // Fetch recent consultations
-        const consultResponse = await fetch(`${backendUrl}/doctor/recent-consultations/${profileData.doctor.id}`);
+        const consultResponse = await fetch(`${backendUrl}/doctor/recent-consultations/${profileData.doctor.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!consultResponse.ok) {
           const errData = await consultResponse.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load consultations (${consultResponse.status})`);

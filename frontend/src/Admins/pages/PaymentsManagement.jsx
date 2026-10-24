@@ -17,6 +17,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { getAuthHeaders } from '../../../supabaseClient';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 const PAGE_SIZE = 50;
@@ -136,31 +137,36 @@ export default function PaymentsManagement() {
 
     // All state updates happen in async continuations of the fetch promise so
     // nothing is set synchronously while the effect body runs.
-    fetch(`${API_BASE_URL}/admin/payments?${params.toString()}`, {
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.message || `Failed to load payments (${res.status})`);
-        }
-        return res.json();
+    const loadPayments = async () => {
+      const headers = await getAuthHeaders();
+      fetch(`${API_BASE_URL}/admin/payments?${params.toString()}`, {
+        signal: controller.signal,
+        headers,
       })
-      .then((data) => {
-        setPayments(data.data?.payments || []);
-        setTotal(data.data?.total ?? (data.data?.payments || []).length);
-        setError('');
-        setLoading(false);
-        setLoadedRev(revKey);
-      })
-      .catch((err) => {
-        if (controller.signal.aborted || err.name === 'AbortError') return;
-        setPayments([]);
-        setTotal(0);
-        setError(`Failed to load payments: ${err.message}`);
-        setLoading(false);
-        setLoadedRev(revKey);
-      });
+        .then(async (res) => {
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.message || `Failed to load payments (${res.status})`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          setPayments(data.data?.payments || []);
+          setTotal(data.data?.total ?? (data.data?.payments || []).length);
+          setError('');
+          setLoading(false);
+          setLoadedRev(revKey);
+        })
+        .catch((err) => {
+          if (controller.signal.aborted || err.name === 'AbortError') return;
+          setPayments([]);
+          setTotal(0);
+          setError(`Failed to load payments: ${err.message}`);
+          setLoading(false);
+          setLoadedRev(revKey);
+        });
+    };
+    loadPayments();
 
     return () => controller.abort();
   }, [activeTab, reloadToken]);
@@ -249,7 +255,10 @@ export default function PaymentsManagement() {
         `${API_BASE_URL}/admin/payments/${selectedSlipPayment.id}/verify-slip`,
         {
           method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
+          headers: {
+            'content-type': 'application/json',
+            ...(await getAuthHeaders()),
+          },
           body: JSON.stringify(body),
         }
       );
@@ -299,7 +308,10 @@ export default function PaymentsManagement() {
         `${API_BASE_URL}/admin/payments/${payment.id}/collect-reception`,
         {
           method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
+          headers: {
+            'content-type': 'application/json',
+            ...(await getAuthHeaders()),
+          },
           body: JSON.stringify({}),
         }
       );

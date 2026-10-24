@@ -88,8 +88,6 @@ export default function LoginPage() {
       sessionNotice: 'For security, you are signed in on this tab only. A new tab or browser restart always asks for credentials again.',
       forgotPassword: 'Forgot Password?',
       loginButton: 'Log in to portal',
-      quickLogin: 'or quick login with',
-      mobileOtp: 'Sign in with Mobile OTP / Passkey',
       newPatient: 'New patient?',
       register: 'Register for an account',
       needHelp: 'Need Help?',
@@ -233,14 +231,6 @@ export default function LoginPage() {
                 )}
               </button>
             </form>
-
-            <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">{t.quickLogin}</div>
-            <button
-              type="button"
-              className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00a8cc] hover:text-[#007b8a] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            >
-              {t.mobileOtp}
-            </button>
 
             <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
               {t.newPatient}{' '}

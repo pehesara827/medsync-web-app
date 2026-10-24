@@ -2,6 +2,8 @@
 // Thin client for the Admin "Patients Management" backend endpoints.
 // Uses the same base-URL convention as the other Admin pages
 // (native fetch + VITE_API_BASE_URL).
+import { getAuthHeaders } from '../../../supabaseClient';
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -23,6 +25,7 @@ export const fetchAdminPatients = async ({ status, date } = {}) => {
 
   const res = await fetch(
     `${API_BASE_URL}/admin/patients?${params.toString()}`,
+    { headers: await getAuthHeaders() }
   );
   if (!res.ok) {
     let message = `Failed to load patients (HTTP ${res.status})`;
@@ -47,7 +50,9 @@ export const fetchAdminPatients = async ({ status, date } = {}) => {
  * @returns {Promise<Object|null>} The patient detail, or null when not found.
  */
 export const fetchAdminPatientById = async (id) => {
-  const res = await fetch(`${API_BASE_URL}/admin/patients/${id}`);
+  const res = await fetch(`${API_BASE_URL}/admin/patients/${id}`, {
+    headers: await getAuthHeaders(),
+  });
   if (!res.ok) {
     let message = `Failed to load patient detail (HTTP ${res.status})`;
     try {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Timer, Hourglass, ArrowRight, Clock, CalendarClock, Users, Save, RefreshCw, AlertCircle } from 'lucide-react';
-import { supabase } from '../../../supabaseClient';
+import { supabase, getAuthHeaders } from '../../../supabaseClient';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
 const DURATIONS = [
@@ -72,7 +72,9 @@ export default function DoctorScheduleManager() {
     try {
       const doctorId = await getDoctorId();
       const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${backendUrl}/doctor/session/current/${doctorId}`);
+      const response = await fetch(`${backendUrl}/doctor/session/current/${doctorId}`, {
+        headers: await getAuthHeaders(),
+      });
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -105,7 +107,10 @@ export default function DoctorScheduleManager() {
       const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
       const response = await fetch(`${backendUrl}/doctor/session/delay/${doctorId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
+        },
         body: JSON.stringify({ minutes: parseInt(selected, 10) }),
       });
 
@@ -150,7 +155,9 @@ export default function DoctorScheduleManager() {
       }
 
       const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${backendUrl}/doctor/schedule/${profile.id}`);
+      const response = await fetch(`${backendUrl}/doctor/schedule/${profile.id}`, {
+        headers: await getAuthHeaders(),
+      });
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -182,7 +189,10 @@ export default function DoctorScheduleManager() {
       const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
       const response = await fetch(`${backendUrl}/doctor/schedules/${scheduleId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
+        },
         body: JSON.stringify({ max_patients: newMax }),
       });
 
