@@ -21,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Step 1: Resolve the identifier (Email, National ID, or Phone) to an email via RPC.
+      // Step 1: Resolve the identifier (Email) to an email via RPC.
       // The RPC returns an array; pick the first matching row.
       const { data, error: rpcError } = await supabase.rpc('get_email_by_identifier', {
         p_identifier: identifier.trim(),
@@ -81,8 +81,8 @@ export default function LoginPage() {
       securePatient: 'Secure patient login for appointments',
       welcomeBack: 'Welcome Back',
       signIn: 'Sign in to access your appointment dashboard.',
-      identifierLabel: 'National ID, Email, or Mobile',
-      identifierPlaceholder: 'e.g. 123456789V or name@example.com',
+      identifierLabel: 'Email Address',
+      identifierPlaceholder: 'name@example.com',
       passwordLabel: 'Password',
       passwordPlaceholder: 'Enter your password',
       sessionNotice: 'For security, you are signed in on this tab only. A new tab or browser restart always asks for credentials again.',
@@ -90,7 +90,6 @@ export default function LoginPage() {
       loginButton: 'Log in to portal',
       newPatient: 'New patient?',
       register: 'Register for an account',
-      needHelp: 'Need Help?',
       healthConnected: 'Your Health, Connected.',
       headline: 'Manage appointments, track queue status in real time, and consult with top specialists.',
       description: 'Get fast access to your appointments, receive updates instantly, and keep your medical journey organized from a single secure portal.',
@@ -102,8 +101,8 @@ export default function LoginPage() {
       securePatient: 'පත්වීම් සඳහා ආරක්ෂිත රෝගී පිවිසුම',
       welcomeBack: 'ඔබව නැවත පිළිගනිමු',
       signIn: 'ඔබගේ පත්වීම් පුවරුවට ප්‍රවේශ වීමට පුරනය වන්න.',
-      identifierLabel: 'ජාතික හැඳුනුම්පත, ඊමේල් හෝ ජංගම දුරකථන',
-      identifierPlaceholder: 'උදා: 123456789V හෝ name@example.com',
+      identifierLabel: 'Email Address',
+      identifierPlaceholder: 'name@example.com',
       passwordLabel: 'මුරපදය',
       passwordPlaceholder: 'ඔබගේ මුරපදය ඇතුළත් කරන්න',
       sessionNotice: 'ආරක්ෂාව සඳහා, ඔබ මෙම ටැබ් එකේ පමණක් පුරනය වී සිටී. නව ටැබ් එකක් හෝ බ්‍රවුසරය නැවත ආරම්භ කිරීමේදී සෑම විටම අක්තපත්‍ර නැවත ඇතුළත් කළ යුතුය.',
@@ -113,7 +112,6 @@ export default function LoginPage() {
       mobileOtp: 'ජංගම OTP / Passkey සමඟ පුරනය වන්න',
       newPatient: 'අලුත් රෝගියෙක්ද?',
       register: 'ගිණුමක් ලියාපදිංචි කරන්න',
-      needHelp: 'උදවු අවශ්‍යද?',
       healthConnected: 'ඔබේ සෞඛ්‍යය, සම්බන්ධිතයි.',
       headline: 'පත්වීම් කළමනාකරණය කරන්න, පෝලිම් තත්ත්වය තත්‍ය කාලීනව නිරීක්ෂණය කරන්න, සහ ප්‍රමුඛ විශේෂඥයින් සමඟ උපදේශනය කරන්න.',
       description: 'ඔබගේ පත්වීම් සඳහා ඉක්මන් ප්‍රවේශයක් ලබා ගන්න, ක්ෂණික යාවත්කාලීන ලබා ගන්න, සහ ඔබගේ වෛද්‍ය ගමන එක් ආරක්ෂිත ද්වාරයකින් සංවිධානය කර තබා ගන්න.',
@@ -141,10 +139,7 @@ export default function LoginPage() {
                 >
                   {language === 'en' ? 'English' : 'සිංහල'}
                 </button>
-                <Link to="/" className="font-semibold text-[#007b8a] hover:text-[#005f71]">
-                  {t.needHelp}
-                </Link>
-              </div>
+                      </div>
             </div>
 
             <div className="mb-10">
@@ -171,7 +166,7 @@ export default function LoginPage() {
                 <input
                   id="login-identifier"
                   name="username"
-                  type="text"
+                  type="email"
                   autoComplete="username"
                   value={identifier}
                   onChange={(e) => {
