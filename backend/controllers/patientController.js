@@ -10,6 +10,16 @@ export const registerPatient = async (req, res, next) => {
       profile: result.profile,
     });
   } catch (error) {
+    // Handle Supabase AuthApiError (e.g. duplicate email from createAuthUser).
+    // These errors are not Postgres error codes, so they wouldn't match the
+    // 23505 check below. Map them to a proper HTTP status instead of 500.
+    if (error.name === 'AuthApiError' || error.name === 'AuthRetryableFetchError') {
+      const status = error.status || 400;
+      return res.status(status).json({
+        message: error.message || 'Registration failed. Please try again.',
+      });
+    }
+
     // Handle duplicate key violations (email, username, phone, national_id)
     if (error.code === '23505') {
       const detail = error.details || error.message || '';
