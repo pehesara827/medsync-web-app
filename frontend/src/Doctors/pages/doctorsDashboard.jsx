@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Users, Star, MessageSquare, Clock, BarChart3 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { getAuthHeaders } from '../../../supabaseClient';
 
 const formatTime = (timeStr) => {
   if (!timeStr) return '—';
@@ -64,7 +65,9 @@ export default function DoctorDashboard() {
         }
 
         const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-        const profileResponse = await fetch(`${backendUrl}/doctor/profile/${user.id}`);
+        const profileResponse = await fetch(`${backendUrl}/doctor/profile/${user.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!profileResponse.ok) {
           const errData = await profileResponse.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load doctor profile (${profileResponse.status})`);
@@ -73,7 +76,9 @@ export default function DoctorDashboard() {
         setDoctor(profileData.doctor);
 
         // Fetch reviews for this doctor
-        const reviewsResponse = await fetch(`${backendUrl}/reviews/doctor/${profileData.doctor.id}`);
+        const reviewsResponse = await fetch(`${backendUrl}/reviews/doctor/${profileData.doctor.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!reviewsResponse.ok) {
           const errData = await reviewsResponse.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load reviews (${reviewsResponse.status})`);
@@ -82,7 +87,9 @@ export default function DoctorDashboard() {
         setReviews(reviewsData.reviews || []);
 
         const todayStr = new Date().toISOString().split('T')[0];
-        const apptResponse = await fetch(`${backendUrl}/doctor/appointments/${profileData.doctor.id}`);
+        const apptResponse = await fetch(`${backendUrl}/doctor/appointments/${profileData.doctor.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!apptResponse.ok) {
           const errData = await apptResponse.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load appointments (${apptResponse.status})`);
@@ -96,7 +103,9 @@ export default function DoctorDashboard() {
         setAppointments(todaysAppts);
 
         // Fetch weekly patient counts for the bar graph
-        const weeklyResponse = await fetch(`${backendUrl}/doctor/weekly-stats/${profileData.doctor.id}`);
+        const weeklyResponse = await fetch(`${backendUrl}/doctor/weekly-stats/${profileData.doctor.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (weeklyResponse.ok) {
           const weeklyData = await weeklyResponse.json();
           setWeeklyData(weeklyData.weekly || []);

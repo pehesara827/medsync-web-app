@@ -2,6 +2,8 @@
 // Thin client for the Admin Schedule Management backend endpoints.
 // Uses the same base-URL convention as the other Admin pages
 // (native fetch + VITE_API_BASE_URL).
+import { getAuthHeaders } from '../../../supabaseClient';
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -18,7 +20,9 @@ export const fetchAdminSchedules = async (options = {}) => {
   if (options.doctorId) params.set('doctor_id', options.doctorId);
   if (options.date) params.set('date', options.date);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${API_BASE_URL}/admin/schedules/all${qs}`);
+  const res = await fetch(`${API_BASE_URL}/admin/schedules/all${qs}`, {
+    headers: await getAuthHeaders(),
+  });
   if (!res.ok) {
     throw new Error(`Failed to load schedules (HTTP ${res.status})`);
   }
@@ -35,7 +39,10 @@ export const fetchAdminSchedules = async (options = {}) => {
 export const createSchedule = async (payload) => {
   const res = await fetch(`${API_BASE_URL}/admin/schedules`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await getAuthHeaders()),
+    },
     body: JSON.stringify(payload),
   });
   const json = await res.json().catch(() => ({}));
@@ -51,7 +58,9 @@ export const createSchedule = async (payload) => {
  * @returns {Promise<Array>} Array of { id, name, specialty }.
  */
 export const fetchAdminDoctors = async () => {
-  const res = await fetch(`${API_BASE_URL}/admin/doctors`);
+  const res = await fetch(`${API_BASE_URL}/admin/doctors`, {
+    headers: await getAuthHeaders(),
+  });
   if (!res.ok) {
     throw new Error(`Failed to load doctors (HTTP ${res.status})`);
   }
@@ -69,6 +78,7 @@ export const fetchAdminDoctors = async () => {
 export const deleteSchedule = async (scheduleId) => {
   const res = await fetch(`${API_BASE_URL}/admin/schedules/${scheduleId}`, {
     method: 'DELETE',
+    headers: await getAuthHeaders(),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -87,7 +97,10 @@ export const deleteSchedule = async (scheduleId) => {
 export const broadcastSessionDelay = async (scheduleId, minutes) => {
   const res = await fetch(`${API_BASE_URL}/admin/schedules/${scheduleId}/broadcast-delay`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await getAuthHeaders()),
+    },
     body: JSON.stringify({ minutes }),
   });
   const json = await res.json().catch(() => ({}));

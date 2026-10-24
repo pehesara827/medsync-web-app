@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import AddAppointmentModal from '../components/AddAppointmentModal';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { getAuthHeaders } from '../../../supabaseClient';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -23,9 +24,11 @@ export default function AdminDashboard() {
   const [walkIns, setWalkIns] = useState([]);
 
   // Today's admin-added walk-ins (manual_appointments), shown in their own card.
-  const loadWalkIns = () => {
+  const loadWalkIns = async () => {
     const today = new Date().toISOString().split('T')[0];
-    fetch(`${API_BASE_URL}/admin/manual-appointments?date=${today}`)
+    fetch(`${API_BASE_URL}/admin/manual-appointments?date=${today}`, {
+      headers: await getAuthHeaders(),
+    })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load walk-ins');
         return res.json();
@@ -34,11 +37,13 @@ export default function AdminDashboard() {
       .catch(() => setWalkIns([]));
   };
 
-  const refreshDashboard = () => {
+  const refreshDashboard = async () => {
     // Re-run dashboard load after a manual appointment is created.
     setLoading(true);
     loadWalkIns();
-    fetch(`${API_BASE_URL}/admin/dashboard`)
+    fetch(`${API_BASE_URL}/admin/dashboard`, {
+      headers: await getAuthHeaders(),
+    })
       .then((res) => res.json())
       .then((data) => {
         setStats([
@@ -58,7 +63,9 @@ export default function AdminDashboard() {
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/admin/dashboard`);
+        const response = await fetch(`${API_BASE_URL}/admin/dashboard`, {
+          headers: await getAuthHeaders(),
+        });
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load dashboard (${response.status})`);

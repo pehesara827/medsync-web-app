@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users, Phone, Droplet, MapPin } from 'lucide-react';
-import { supabase } from '../../../supabaseClient';
+import { supabase, getAuthHeaders } from '../../../supabaseClient';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
 export default function DoctorPatients() {
@@ -21,7 +21,9 @@ export default function DoctorPatients() {
         const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
         // Get doctor profile to get doctor_id
-        const profileResponse = await fetch(`${backendUrl}/doctor/profile/${user.id}`);
+        const profileResponse = await fetch(`${backendUrl}/doctor/profile/${user.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!profileResponse.ok) {
           const errData = await profileResponse.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load doctor profile (${profileResponse.status})`);
@@ -29,7 +31,9 @@ export default function DoctorPatients() {
         const profileData = await profileResponse.json();
 
         // Fetch patients for this doctor
-        const patientsResponse = await fetch(`${backendUrl}/doctor/patients/${profileData.doctor.id}`);
+        const patientsResponse = await fetch(`${backendUrl}/doctor/patients/${profileData.doctor.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!patientsResponse.ok) {
           const errData = await patientsResponse.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load patients (${patientsResponse.status})`);

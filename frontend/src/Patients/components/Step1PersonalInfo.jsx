@@ -1,11 +1,19 @@
-export default function Step1PersonalInfo({ formData, handleChange, nextStep }) {
+export default function Step1PersonalInfo({ formData, handleChange, nextStep, profilePicturePreview }) {
   return (
     <div className="space-y-8">
       <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col items-center gap-4">
-          <div className="flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed border-cyan-300 bg-slate-50 text-cyan-600">
-            <span className="text-4xl font-bold">+</span>
-          </div>
+          {profilePicturePreview ? (
+            <img
+              src={profilePicturePreview}
+              alt="Profile picture preview"
+              className="h-28 w-28 rounded-full object-cover border-2 border-cyan-300 bg-slate-50"
+            />
+          ) : (
+            <div className="flex h-28 w-28 items-center justify-center rounded-full border-2 border-dashed border-cyan-300 bg-slate-50 text-cyan-600">
+              <span className="text-4xl font-bold">+</span>
+            </div>
+          )}
           <label className="inline-flex items-center gap-2 rounded-full border border-cyan-500 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-100 cursor-pointer">
             Upload Profile Picture
             <input
@@ -16,7 +24,7 @@ export default function Step1PersonalInfo({ formData, handleChange, nextStep }) 
               onChange={handleChange}
             />
           </label>
-          <p className="text-xs text-slate-400">PNG, JPG or WEBP up to 5 MB</p>
+          <p className="text-xs text-slate-400">Maximum size: 5 MB</p>
         </div>
 
         <div className="mt-10 grid gap-4 sm:grid-cols-2">
@@ -105,16 +113,7 @@ export default function Step1PersonalInfo({ formData, handleChange, nextStep }) 
             />
           </label>
 
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-slate-700">National ID / Passport Number</span>
-            <input
-              name="national_id_passport"
-              value={formData.national_id_passport || ''}
-              onChange={handleChange}
-              placeholder="Enter ID number"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-            />
-          </label>
+
         </div>
 
         <div className="mt-10 flex justify-center">

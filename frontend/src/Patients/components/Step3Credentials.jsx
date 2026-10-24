@@ -12,16 +12,7 @@ export default function Step3Credentials({ formData, handleChange, prevStep, isS
           </div>
 
           <div className="grid gap-4 sm:grid-cols-1">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Username / Portal Login ID</span>
-              <input
-                name="username"
-                value={formData.username || ''}
-                onChange={handleChange}
-                placeholder="Enter desired username"
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
-            </label>
+
 
             <label className="block relative">
               <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Create Password</span>

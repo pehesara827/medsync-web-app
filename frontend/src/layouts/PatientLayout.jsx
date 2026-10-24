@@ -8,7 +8,7 @@ export function PatientLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900">
       {/* Sidebar - Fixed width */}
       <PatientSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 

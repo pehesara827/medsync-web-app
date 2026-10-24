@@ -12,7 +12,7 @@ import {
   KeyRound,
   User,
 } from 'lucide-react';
-import { supabase } from '../../../supabaseClient';
+import { supabase, getAuthHeaders } from '../../../supabaseClient';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { AVATAR_BUCKET, MAX_IMAGE_BYTES, MAX_IMAGE_LABEL, ALLOWED_AVATAR_TYPES } from '../../utils/uploadLimits';
 
@@ -62,7 +62,9 @@ export default function DoctorProfile() {
         }
 
         const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-        const response = await fetch(`${backendUrl}/doctor/profile/${user.id}`);
+        const response = await fetch(`${backendUrl}/doctor/profile/${user.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.message || `Failed to load profile (${response.status})`);
@@ -132,7 +134,10 @@ export default function DoctorProfile() {
 
       const response = await fetch(`${backendUrl}/doctor/profile/${user.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -195,7 +200,10 @@ export default function DoctorProfile() {
       const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
       const response = await fetch(`${backendUrl}/doctor/profile/${user.id}/photo`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
+        },
         body: JSON.stringify({ profilePictureUrl: publicUrlData.publicUrl }),
       });
       if (!response.ok) {

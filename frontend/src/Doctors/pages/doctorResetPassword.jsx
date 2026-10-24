@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { KeyRound, User, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle, ArrowLeft, Send, ShieldCheck } from 'lucide-react';
-import { supabase } from '../../../supabaseClient';
+import { supabase, getAuthHeaders } from '../../../supabaseClient';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -42,7 +42,9 @@ export default function DoctorResetPassword() {
           return;
         }
         setUserId(user.id);
-        const response = await fetch(`${API_BASE_URL}/doctor/profile/${user.id}`);
+        const response = await fetch(`${API_BASE_URL}/doctor/profile/${user.id}`, {
+          headers: await getAuthHeaders(),
+        });
         if (!response.ok) throw new Error(`Failed to load profile (${response.status})`);
         const data = await response.json();
         setEmail(data?.doctor?.email || user.email || '');
@@ -73,7 +75,10 @@ export default function DoctorResetPassword() {
     try {
       const response = await fetch(`${API_BASE_URL}/doctor/profile/${userId}/credentials`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
+        },
         body: JSON.stringify({ username: trimmed }),
       });
       const data = await response.json().catch(() => ({}));

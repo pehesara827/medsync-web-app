@@ -223,9 +223,7 @@ export default function ChatWidget() {
         ) : (
           <MessageCircle className="h-5 w-5" />
         )}
-        <span className="hidden sm:inline">
-          {isOpen ? 'Close' : 'Need Help?'}
-        </span>
+
       </button>
     </>
   );
