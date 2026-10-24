@@ -1,3 +1,4 @@
+import { supabase } from '../supabase.js';
 import * as authUserModel from '../models/authUserModel.js';
 import * as patientProfileModel from '../models/patientProfileModel.js';
 
