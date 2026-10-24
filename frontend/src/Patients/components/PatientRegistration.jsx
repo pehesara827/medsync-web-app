@@ -29,7 +29,6 @@ export default function PatientRegistration() {
     phone_country_code: '+1',
     phone_number: '',
     email: '',
-    national_id_passport: '',
     emergency_contact_name: '',
     emergency_contact_rel: '',
     emergency_contact_phone_country_code: '+1',
@@ -37,11 +36,11 @@ export default function PatientRegistration() {
     alt_contact_phone: '',
     home_address: '',
     blood_group: '',
-    username: '',
     password_hash: '',
     confirm_password: '',
     terms_accepted: false,
   });
+  const [profilePicturePreview, setProfilePicturePreview] = useState('');
 
   const handleChange = (event) => {
     const { name, type, value, checked, files } = event.target;
@@ -60,6 +59,11 @@ export default function PatientRegistration() {
         event.target.value = '';
         return;
       }
+      // Create a preview URL so the uploaded picture shows in the holder.
+      if (profilePicturePreview) {
+        URL.revokeObjectURL(profilePicturePreview);
+      }
+      setProfilePicturePreview(URL.createObjectURL(picked));
     }
 
     setFormData((prev) => ({
@@ -73,9 +77,9 @@ export default function PatientRegistration() {
 
   const handleNext = () => {
     const requiredFieldsByStep = {
-      1: ['first_name', 'last_name', 'date_of_birth', 'gender', 'phone_number', 'email', 'national_id_passport'],
+      1: ['first_name', 'last_name', 'date_of_birth', 'gender', 'phone_number', 'email'],
       2: ['emergency_contact_name', 'emergency_contact_rel', 'emergency_contact_phone'],
-      3: ['username', 'password_hash', 'confirm_password', 'terms_accepted'],
+      3: ['password_hash', 'confirm_password', 'terms_accepted'],
     };
 
     const missingField = requiredFieldsByStep[currentStep].find((field) => {
@@ -186,7 +190,6 @@ export default function PatientRegistration() {
         },
         body: JSON.stringify({
           // Credentials
-          username: formData.username || undefined,
           email: formData.email,
           password: formData.password_hash,
           terms_accepted: formData.terms_accepted,
@@ -198,7 +201,6 @@ export default function PatientRegistration() {
           date_of_birth: formData.date_of_birth || null,
           gender: formData.gender || null,
           phone_number: `${formData.phone_country_code || '+1'}${formData.phone_number || ''}`,
-          national_id_passport: formData.national_id_passport,
           emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_rel: formData.emergency_contact_rel,
           emergency_contact_phone: `${formData.emergency_contact_phone_country_code || '+1'}${formData.emergency_contact_phone || ''}`,
@@ -232,7 +234,7 @@ export default function PatientRegistration() {
 
   const renderStep = () => {
     if (currentStep === 1) {
-      return <Step1PersonalInfo formData={formData} handleChange={handleChange} nextStep={handleNext} />;
+      return <Step1PersonalInfo formData={formData} handleChange={handleChange} nextStep={handleNext} profilePicturePreview={profilePicturePreview} />;
     }
 
     if (currentStep === 2) {
