@@ -100,20 +100,66 @@ export const registerPatient = async (registrationData) => {
     dob = `${y.toString().padStart(4, '0')}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
   }
 
+  // Pre-check: if a patient profile already exists for this email, tell the
+  // client clearly instead of letting Supabase throw an opaque AuthApiError
+  // that surfaces as a 500. Handles orphaned auth.users from previous failed
+  // registrations (auth user created but profile insert failed).
+  try {
+    const { data: existingUsers } = await supabase
+      .from('users')
+      .select('id, email, role')
+      .eq('email', email)
+      .maybeSingle();
+    if (existingUsers) {
+      const { data: existingProfile } = await supabase
+        .from('patient_profiles')
+        .select('id')
+        .eq('user_id', existingUsers.id)
+        .maybeSingle();
+      if (existingProfile) {
+        const error = new Error('Email already registered. Please log in instead.');
+        error.status = 409;
+        throw error;
+      }
+      // Orphaned auth user (no profile): clean it up so registration can proceed.
+      await authUserModel.deleteAuthUser(existingUsers.id).catch((cleanupErr) => {
+        console.error('[PatientRegistration] failed to delete orphaned auth user:', cleanupErr.message);
+      });
+    }
+  } catch (precheckErr) {
+    if (precheckErr.status === 409) throw precheckErr;
+    // Don't fail registration on a pre-check error; log and continue.
+    console.error('[PatientRegistration] pre-check failed:', precheckErr.message);
+  }
+
   // 1. Create the account in auth.users (email + password live here).
   //    The DB trigger `handle_new_user_registration` will automatically
   //    insert the matching row into public.users using the user metadata.
-  const authUser = await authUserModel.createAuthUser({
-    email,
-    password: plainPassword,
-    userMetadata: {
-      username,
-      role: 'PATIENT',
-      first_name,
-      last_name,
-      terms_accepted,
-    },
-  });
+  let authUser;
+  try {
+    authUser = await authUserModel.createAuthUser({
+      email,
+      password: plainPassword,
+      userMetadata: {
+        username,
+        role: 'PATIENT',
+        first_name,
+        last_name,
+        terms_accepted,
+      },
+    });
+  } catch (authErr) {
+    // Capture the raw error for diagnosis (500s surface here when Supabase
+    // returns a non-standard error, e.g. duplicate email with no .status).
+    console.error('[PatientRegistration] createAuthUser failed:', {
+      message: authErr.message,
+      name: authErr.name,
+      status: authErr.status,
+      code: authErr.code,
+      detail: authErr.detail,
+    });
+    throw authErr;
+  }
 
   const userId = authUser && authUser.id;
 
@@ -131,8 +177,9 @@ export const registerPatient = async (registrationData) => {
   }
 
   // 2. Insert into patient_profiles table
+  let patientProfile;
   try {
-    const patientProfile = await patientProfileModel.create({
+    patientProfile = await patientProfileModel.create({
       user_id: userId,
       profile_picture_url: profile_picture_url || null,
       first_name,
@@ -148,12 +195,19 @@ export const registerPatient = async (registrationData) => {
       home_address: home_address || null,
       blood_group: blood_group || null,
     });
-
-    return { user: { id: userId, username, email, role: 'PATIENT', terms_accepted }, profile: patientProfile };
   } catch (profileError) {
+    console.error('[PatientRegistration] patientProfile insert failed:', {
+      message: profileError.message,
+      code: profileError.code,
+      detail: profileError.detail,
+      column: profileError.column,
+      table: profileError.table,
+    });
     // 3. Rollback: delete the auth.users record (the trigger will cascade
     //    or we rely on the trigger's cleanup for the users row)
     await authUserModel.deleteAuthUser(userId).catch(() => {});
     throw profileError;
   }
+
+  return { user: { id: userId, username, email, role: 'PATIENT', terms_accepted }, profile: patientProfile };
 };
