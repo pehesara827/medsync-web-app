@@ -31,7 +31,7 @@ function generateDisplayId(uuid) {
   return `MED-${shortId}`;
 }
 
-export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
+export default async function AddAppointmentModal({ isOpen, onClose, onCreated }) {
   // ── Patient fields (manual entry) ─────────────────────────────────────
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -60,7 +60,7 @@ export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
     setResult(null);
     setError('');
     setLoadingDoctors(true);
-    fetch(`${API_BASE_URL}/admin/doctors`, { headers: await getAuthHeaders() })
+    ;(async () => { fetch(`${API_BASE_URL}/admin/doctors`, { headers: await getAuthHeaders() }) })()
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load doctors');
         return res.json();
@@ -79,7 +79,7 @@ export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
     fetch(
       `${API_BASE_URL}/admin/schedules?doctor_id=${encodeURIComponent(
         doctorId
-      )}&date=${encodeURIComponent(appointmentDate)}`, { headers: await getAuthHeaders() }
+      )}&date=${encodeURIComponent(appointmentDate)}`, { headers: await getAuthHeaders() }) })()
     )
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load time slots');
