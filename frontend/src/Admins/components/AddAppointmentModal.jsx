@@ -31,7 +31,7 @@ function generateDisplayId(uuid) {
   return `MED-${shortId}`;
 }
 
-export default async function AddAppointmentModal({ isOpen, onClose, onCreated }) {
+export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
   // ── Patient fields (manual entry) ─────────────────────────────────────
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -57,37 +57,71 @@ export default async function AddAppointmentModal({ isOpen, onClose, onCreated }
   // Load approved doctors when the modal opens
   useEffect(() => {
     if (!isOpen) return;
+
     setResult(null);
     setError('');
     setLoadingDoctors(true);
-    ;(async () => { fetch(`${API_BASE_URL}/admin/doctors`, { headers: await getAuthHeaders() }) })()
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to load doctors');
-        return res.json();
-      })
-      .then((data) => setDoctors(data.doctors || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoadingDoctors(false));
+
+    async function loadDoctors() {
+      try {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_BASE_URL}/admin/doctors`, {
+          headers,
+        });
+
+        if (!res.ok) {
+          throw new Error('Failed to load doctors');
+        }
+
+        const data = await res.json();
+        setDoctors(data.doctors || []);
+      } catch (err) {
+        setError(err.message || 'Failed to load doctors');
+      } finally {
+        setLoadingDoctors(false);
+      }
+    }
+
+    loadDoctors();
   }, [isOpen]);
 
   // Load available slots whenever doctor or date changes
   useEffect(() => {
     setSelectedSlot(null);
     setSlots([]);
-    if (!doctorId || !appointmentDate) return;
+
+    if (!doctorId || !appointmentDate) {
+      setLoadingSlots(false);
+      return;
+    }
+
     setLoadingSlots(true);
-    fetch(
-      `${API_BASE_URL}/admin/schedules?doctor_id=${encodeURIComponent(
-        doctorId
-      )}&date=${encodeURIComponent(appointmentDate)}`, { headers: await getAuthHeaders() }) })()
-    )
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to load time slots');
-        return res.json();
-      })
-      .then((data) => setSlots((data.slots || []).filter((s) => !s.isFull)))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoadingSlots(false));
+
+    async function loadSlots() {
+      try {
+        const headers = await getAuthHeaders();
+
+        const res = await fetch(
+          `${API_BASE_URL}/admin/schedules?doctor_id=${encodeURIComponent(
+            doctorId
+          )}&date=${encodeURIComponent(appointmentDate)}`,
+          { headers }
+        );
+
+        if (!res.ok) {
+          throw new Error('Failed to load time slots');
+        }
+
+        const data = await res.json();
+        setSlots((data.slots || []).filter((slot) => !slot.isFull));
+      } catch (err) {
+        setError(err.message || 'Failed to load time slots');
+      } finally {
+        setLoadingSlots(false);
+      }
+    }
+
+    loadSlots();
   }, [doctorId, appointmentDate]);
 
   const handleSubmit = async (e) => {
@@ -117,8 +151,10 @@ export default async function AddAppointmentModal({ isOpen, onClose, onCreated }
     try {
       const res = await fetch(`${API_BASE_URL}/admin/manual-appointments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+  'Content-Type': 'application/json',
           ...(await getAuthHeaders()),
+},
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
