@@ -60,7 +60,7 @@ export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
     setResult(null);
     setError('');
     setLoadingDoctors(true);
-    fetch(`${API_BASE_URL}/admin/doctors`)
+    fetch(`${API_BASE_URL}/admin/doctors`, { headers: await getAuthHeaders() })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load doctors');
         return res.json();
@@ -79,7 +79,7 @@ export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
     fetch(
       `${API_BASE_URL}/admin/schedules?doctor_id=${encodeURIComponent(
         doctorId
-      )}&date=${encodeURIComponent(appointmentDate)}`
+      )}&date=${encodeURIComponent(appointmentDate)}`, { headers: await getAuthHeaders() }
     )
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load time slots');
@@ -118,6 +118,7 @@ export default function AddAppointmentModal({ isOpen, onClose, onCreated }) {
       const res = await fetch(`${API_BASE_URL}/admin/manual-appointments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+          ...(await getAuthHeaders()),
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));

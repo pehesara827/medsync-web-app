@@ -141,6 +141,7 @@ export default function EditDoctorModal({ isOpen, doctor, onClose, onUpdated }) 
       const res = await fetch(`${API_BASE_URL}/admin/doctors/${doctor.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+          ...(await getAuthHeaders()),
         body: JSON.stringify(payload),
       });
 

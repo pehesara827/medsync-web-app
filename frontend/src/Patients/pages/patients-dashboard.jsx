@@ -157,7 +157,11 @@ export default function PatientsDashboard() {
         </div>
       </div>
 
-      <BookAppointmentModal key={modalKey} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <BookAppointmentModal
+  key={modalKey}
+  isOpen={isModalOpen}
+  onClose={() => setIsModalOpen(false)}
+  onUpdated={() => setModalKey((k) => k + 1)} />
 
       <div className='grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch'>
         <div className='xl:col-span-2 flex flex-col gap-6 md:gap-8 min-w-0'>
