@@ -37,6 +37,9 @@ const mapPaymentStatus = (status) => (status === 'PAID' ? 'Paid' : 'Pending');
 const parseDateTime = (dateStr, timeStr) =>
   new Date(`${dateStr}T${timeStr || '00:00:00'}`);
 
+const formatWallClockDateTime = (dateStr, timeStr) =>
+  `${dateStr}T${timeStr || '00:00:00'}`;
+
 /**
  * Derives the live status of a schedule from "now".
  */
@@ -72,7 +75,8 @@ const mapDoctor = (doctor) => ({
  * Response shape per session:
  *   { id, tokenPrefix, doctor{ name, specialty, room, avatar },
  *     start, end, startTime, endTime, capacity, bookedCount, seenCount,
- *     missedCount, status }  <- start/end are ISO datetimes; status is a hint.
+ *     missedCount, status }  <- start/end are local wall-clock datetimes
+ *     without a timezone suffix; status is a hint.
  */
 export const getTodayQueue = async (req, res, next) => {
   try {
@@ -171,8 +175,8 @@ export const getTodayQueue = async (req, res, next) => {
         id: s.id,
         tokenPrefix: String.fromCharCode(65 + idx), // A, B, C ...
         doctor: mapDoctor(s.doctor_profiles),
-        start: parseDateTime(s.available_date, s.start_time),
-        end: parseDateTime(s.available_date, s.end_time),
+        start: formatWallClockDateTime(s.available_date, s.start_time),
+        end: formatWallClockDateTime(s.available_date, s.end_time),
         startTime: s.start_time,
         endTime: s.end_time,
         capacity: s.max_patients ?? 0,
@@ -320,8 +324,14 @@ export const getQueueSession = async (req, res, next) => {
           id: schedule.id,
           tokenPrefix: 'A',
           doctor: mapDoctor(schedule.doctor_profiles),
-          start: parseDateTime(schedule.available_date, schedule.start_time),
-          end: parseDateTime(schedule.available_date, schedule.end_time),
+          start: formatWallClockDateTime(
+            schedule.available_date,
+            schedule.start_time
+          ),
+          end: formatWallClockDateTime(
+            schedule.available_date,
+            schedule.end_time
+          ),
           startTime: schedule.start_time,
           endTime: schedule.end_time,
           capacity: schedule.max_patients ?? 0,
@@ -400,4 +410,3 @@ export const completeAppointment = async (req, res, next) => {
     next(error);
   }
 };
-
