@@ -163,6 +163,7 @@ const handleSpecialtyChange = (e) => {
       const res = await fetch(`${API_BASE_URL}/admin/doctors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+          ...(await getAuthHeaders()),
         body: JSON.stringify(payload),
       });
 

@@ -88,7 +88,7 @@ export default function PatientRegistration() {
     });
 
     if (missingField) {
-      window.alert('Please fill in all required fields before continuing.');
+      setSubmitError(`Please fill in the required field: ${missingField}`);
       return;
     }
 
