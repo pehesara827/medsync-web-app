@@ -64,8 +64,8 @@ const timeUntil = (target, now) => {
 
 /**
  * Maps a backend session header (from GET /queue/today) into the shape this
- * page's layout expects. start/end arrive as ISO strings via JSON and are
- * reified back into Date objects so fmtRange/getSessionStatus keep working.
+ * page's layout expects. start/end arrive as local wall-clock datetime strings
+ * so reifying them does not shift schedule times through UTC.
  * `patients: null` signals "not loaded yet" (the full queue is fetched lazily
  * when the session is selected).
  */
