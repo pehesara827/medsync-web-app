@@ -480,10 +480,10 @@ MedSync was developed collaboratively by a team of contributors.
 
 **Team Members**
 
-- **[Your Name]** — [Your actual contributions]
-- **[Team Member 2]** — [Their actual contributions]
-- **[Team Member 3]** — [Their actual contributions]
-- **[Team Member 4]** — [Their actual contributions]
+- **Uditha pehesara** 
+- **Sanathmi Supunsara** 
+- **Keshara Abawikrama** 
+- **Chathuni Kavindi** 
 
 The project reflects collaborative work in full-stack development, API integration, database design, workflow implementation, and practical software engineering.
 
@@ -496,10 +496,6 @@ This application is intended to support general healthcare appointment and clini
 ---
 
 ## Screenshots
-
-Add screenshots of the actual application here to demonstrate the interface and main workflows.
-
-Recommended screenshots:
 
 1. Public landing page
 2. Patient dashboard and appointment booking flow
