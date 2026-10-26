@@ -12,7 +12,7 @@ const FALLBACK_AVATAR_URL =
 // Map route paths to your desired dynamic titles
 const PAGE_TITLES = {
   '/queue': 'Queue Management',
-  '/patient': 'Welcome, Uditha',
+  '/patient': 'Welcome',
   '/patient/appointments' : 'Manage Your Appointments Here',
   '/patient/doctors': 'Your Doctors Here',
   '/patient/profile': 'Profile',
@@ -144,12 +144,15 @@ export default function Header({ onMenuClick }) {
   }, [userId]);
 
   // Get the current page title from the route map, falling back to the path
-  // name. The patient profile route shows the patient's own name instead.
-  const currentTitle = isProfileRoute
-    ? patientName || PAGE_TITLES['/patient/profile']
-    : PAGE_TITLES[location.pathname] ||
-      location.pathname.replace('/', '').replace('-', ' ') ||
-      'Dashboard';
+  // name. The patient dashboard route shows the logged-in patient's own name.
+  const currentTitle =
+    location.pathname === '/patient' && patientName
+      ? `Welcome, ${patientName}`
+      : isProfileRoute
+        ? patientName || PAGE_TITLES['/patient/profile']
+        : PAGE_TITLES[location.pathname] ||
+          location.pathname.replace('/', '').replace('-', ' ') ||
+          'Dashboard';
 
   return (
     <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200/80 dark:border-slate-700/80 px-4 md:px-8 py-2.5 md:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 select-none sticky top-0 z-10">

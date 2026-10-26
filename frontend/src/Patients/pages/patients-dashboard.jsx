@@ -41,7 +41,9 @@ export default function PatientsDashboard() {
   const handleFavoriteToggle = (doctorId, isFav) => {
     setFavoriteDoctors((prev) => {
       if (isFav) {
-        return prev.map((d) => (d.id === doctorId ? { ...d, isFavorite: true } : d));
+        const existing = prev.find((d) => d.id === doctorId);
+        if (existing) return prev.map((d) => (d.id === doctorId ? { ...d, isFavorite: true } : d));
+        return prev;
       }
       return prev.filter((d) => d.id !== doctorId);
     });
@@ -80,24 +82,25 @@ export default function PatientsDashboard() {
           'Content-Type': 'application/json',
           ...(await getAuthHeaders()),
         };
-        const response = await fetch(`${backendUrl}/api/appointments/patient/${profile.id}`, {
-          headers,
-        });
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.message || `Failed to load appointments (${response.status})`);
+        const [appointmentsRes, favoritesRes] = await Promise.all([
+          fetch(`${backendUrl}/api/appointments/patient/${profile.id}`, { headers }),
+          fetch(`${backendUrl}/api/favorites/patient/${profile.id}`, { headers }),
+        ]);
+
+        if (!appointmentsRes.ok) {
+          const errData = await appointmentsRes.json().catch(() => ({}));
+          throw new Error(errData.message || `Failed to load appointments (${appointmentsRes.status})`);
         }
 
-        const data = await response.json();
-        setAppointments(data.appointments || []);
-        
-        const appts = data.appointments || [];
-        
+        const appointmentsData = await appointmentsRes.json();
+        setAppointments(appointmentsData.appointments || []);
+
+        const appts = appointmentsData.appointments || [];
         const completedVisits = appts.filter(
           (a) => (a.badgeStatus || a.status || '').toUpperCase() === 'COMPLETED'
         ).length;
-        
+
         setStats({
           totalScheduled: appts.filter(
             (a) => {
@@ -108,6 +111,19 @@ export default function PatientsDashboard() {
           completedVisits,
           waitlist: 0,
         });
+
+        if (favoritesRes.ok) {
+          const favoritesData = await favoritesRes.json();
+          const favoriteList = favoritesData.favorites || [];
+          setFavoriteDoctors(
+            favoriteList.map((doctor) => ({
+              ...doctor,
+              isFavorite: true,
+            }))
+          );
+        } else {
+          setFavoriteDoctors([]);
+        }
 
         try {
           const waitlistResponse = await fetch(`${backendUrl}/api/waitlist/patient/${profile.id}`);
