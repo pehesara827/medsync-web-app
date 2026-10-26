@@ -7,7 +7,7 @@ This repository is split into two independently deployable services:
 - `backend/` — Express API and scheduled background jobs
 - `frontend/` — React + Vite single-page application
 
-🌐 Live Demo: [Add your deployed application URL]
+🌐 Live Demo: https://medsync-web-app-37mi.vercel.app/
 ---
 
 ## Table of Contents
@@ -275,7 +275,7 @@ Install the following:
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/pehesara827/medsync-web-app.git
 cd medsync-web-app
 ```
 
@@ -498,7 +498,17 @@ This application is intended to support general healthcare appointment and clini
 ## Screenshots
 
 1. Public landing page
-2. Patient dashboard and appointment booking flow
-3. Doctor dashboard
-4. Admin management panel
-5. Payment and notification flows
+   <img width="1915" height="913" alt="4" src="https://github.com/user-attachments/assets/b5475364-49d0-42af-be6c-7b02fb461e2a" />
+3. Patient dashboard and appointment booking flow
+<img width="1917" height="931" alt="1" src="https://github.com/user-attachments/assets/03b9fdab-84a2-46ec-b82f-cef09e2eab82" />
+<img width="976" height="858" alt="Screenshot 2026-10-26 095910" src="https://github.com/user-attachments/assets/53b1f2b8-b1a1-44d0-ae37-af7aa26ed67b" />
+<img width="963" height="852" alt="Screenshot 2026-10-26 095855" src="https://github.com/user-attachments/assets/5a01ff27-ed42-492e-8582-a81fbaf9c795" />
+
+5. Doctor dashboard
+<img width="1917" height="931" alt="2" src="https://github.com/user-attachments/assets/ae03022b-c3c2-421e-8207-b334c1dde8b9" />
+
+7. Admin management panel
+<img width="1917" height="932" alt="3" src="https://github.com/user-attachments/assets/79950b12-0789-4c02-b715-d4cf15e71bfb" />
+
+9. Payment and notification flows
+<img width="1915" height="972" alt="Screenshot 2026-10-26 095926" src="https://github.com/user-attachments/assets/80c07a11-ad23-4ba0-b8ea-9f9c571fa077" />
